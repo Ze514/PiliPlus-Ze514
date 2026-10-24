@@ -11,6 +11,7 @@ import 'package:PiliPlus/models/common/msg/msg_unread_type.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
+import 'package:PiliPlus/pages/main/web_tabs/controller.dart';
 import 'package:PiliPlus/pages/mine/view.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
@@ -66,12 +67,18 @@ class MainController extends GetxController
 
   late bool directExitOnBack = Pref.directExitOnBack;
 
+  /// Runtime-only web tabs (desktop only, see `WebTabsController`).
+  WebTabsController? webTabs;
+
   static const _period = 5 * 60 * 1000;
   late int _lastSelectTime = 0;
 
   @override
   void onInit() {
     super.onInit();
+    if (WebTabsController.supported) {
+      webTabs = Get.putOrFind(WebTabsController.new);
+    }
     if (Pref.autoUpdate) {
       Update.checkUpdate();
     }
@@ -290,6 +297,7 @@ class MainController extends GetxController
 
   void setIndex(int value) {
     feedBack();
+    webTabs?.deactivate();
 
     final currentNav = navigationBars[value];
     if (value != selectedIndex.value) {

@@ -13,7 +13,9 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
 import 'package:PiliPlus/pages/common/slide/common_slide_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
+import 'package:PiliPlus/pages/main/web_tabs/controller.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
+import 'package:PiliPlus/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPlus/pages/setting/widgets/slider_dialog.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -52,6 +54,22 @@ List<SettingsModel> get extraSettings => [
       leading: const Icon(Icons.storage),
       onTap: _showDownPathDialog,
     ),
+    if (WebTabsController.supported) ...[
+      const SwitchModel(
+        title: '启用网页标签',
+        subtitle: '在左侧栏新建网页标签页，不保存 Cookie，退出后不留痕迹',
+        leading: Icon(Icons.tab_outlined),
+        setKey: SettingBoxKey.webTabEnable,
+        defaultVal: true,
+        onChanged: WebTabsController.applyEnabled,
+      ),
+      NormalModel(
+        title: '标签页数量上限',
+        getSubtitle: () => '${Pref.webTabMax} 个',
+        leading: const Icon(Icons.filter_none),
+        onTap: _showWebTabMaxDialog,
+      ),
+    ],
   ] else if (Platform.isAndroid)
     SwitchModel(
       title: '允许三方APP访问私有存储',
@@ -278,6 +296,31 @@ List<SettingsModel> get extraSettings => [
     },
   ),
 ];
+
+Future<void> _showWebTabMaxDialog(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final result = await showDialog<int>(
+    context: context,
+    builder: (context) => SelectDialog<int>(
+      title: '标签页数量上限',
+      value: Pref.webTabMax,
+      values: const [
+        (5, '5 个'),
+        (10, '10 个'),
+        (15, '15 个'),
+        (20, '20 个'),
+        (30, '30 个'),
+      ],
+    ),
+  );
+  if (result != null && result != Pref.webTabMax) {
+    GStorage.setting.put(SettingBoxKey.webTabMax, result);
+    setState();
+    SmartDialog.showToast('已设为 $result 个');
+  }
+}
 
 void _showDownPathDialog(BuildContext context, VoidCallback setState) {
   showDialog(

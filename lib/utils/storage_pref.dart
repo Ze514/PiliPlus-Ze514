@@ -716,6 +716,12 @@ abstract final class Pref {
   static bool get hideSideBarLabel =>
       _setting.get(SettingBoxKey.hideSideBarLabel, defaultValue: false);
 
+  static bool get webTabEnable =>
+      _setting.get(SettingBoxKey.webTabEnable, defaultValue: true);
+
+  static int get webTabMax =>
+      _setting.get(SettingBoxKey.webTabMax, defaultValue: 10);
+
   static bool get dynamicsShowAllFollowedUp => _setting.get(
     SettingBoxKey.dynamicsShowAllFollowedUp,
     defaultValue: false,
