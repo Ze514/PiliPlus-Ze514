@@ -44,6 +44,20 @@ class _MyReplyState extends State<MyReply> with DynMixin {
   void initState() {
     super.initState();
     _initReply();
+    GStorage.replyRevision.addListener(_onReplyChanged);
+  }
+
+  @override
+  void dispose() {
+    GStorage.replyRevision.removeListener(_onReplyChanged);
+    super.dispose();
+  }
+
+  /// 外部批量写入评论（如 WebDAV 恢复）后重新加载，避免展示旧数据
+  void _onReplyChanged() {
+    if (mounted) {
+      setState(_initReply);
+    }
   }
 
   void _initReply() {

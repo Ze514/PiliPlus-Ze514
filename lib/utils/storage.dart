@@ -12,6 +12,7 @@ import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/set_int_adapter.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as path;
 
@@ -23,6 +24,12 @@ abstract final class GStorage {
   static late final Box<dynamic> video;
   static late final Box<int> watchProgress;
   static late final Box<Uint8List>? reply;
+
+  /// 评论记录变更信号
+  ///
+  /// 从外部批量写入 [reply]（如 WebDAV 恢复）后自增，已打开的页面据此重新加载，
+  /// 避免停留在旧数据上。
+  static final ValueNotifier<int> replyRevision = ValueNotifier<int>(0);
 
   static Future<void> init() async {
     Hive.init(path.join(appSupportDirPath, 'hive'));
