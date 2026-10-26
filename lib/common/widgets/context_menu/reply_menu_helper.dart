@@ -131,10 +131,24 @@ void showReplyCopyDialog(
                           caseSensitive: true,
                         );
                         ReplyGrpc.enableFilter = true;
-                        GStorage.setting.put(
-                          SettingBoxKey.banWordForReply,
-                          filter,
-                        );
+                        // 正则模式写回正则键；关键词模式要存未转义的原文，
+                        // 否则下次读取会被重复转义
+                        const regexKey = SettingBoxKey.banWordRegexForReply;
+                        if (GStorage.setting
+                            .get(regexKey, defaultValue: '')
+                            .isNotEmpty) {
+                          GStorage.setting.put(regexKey, filter);
+                        } else {
+                          final banWord = GStorage.setting.get(
+                            SettingBoxKey.banWordForReply,
+                            defaultValue: '',
+                          );
+                          final selected = state.selectedText!;
+                          GStorage.setting.put(
+                            SettingBoxKey.banWordForReply,
+                            banWord.isEmpty ? selected : '$banWord|$selected',
+                          );
+                        }
                         SmartDialog.showToast('已保存');
                       },
                     );

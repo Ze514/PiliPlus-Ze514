@@ -280,14 +280,28 @@ abstract final class Pref {
     return CDNService.backupUrl;
   }
 
-  static String get banWordForRecommend =>
-      _setting.get(SettingBoxKey.banWordForRecommend, defaultValue: '');
+  /// 关键词过滤实际生效的表达式
+  ///
+  /// 正则模式下存于 [regexKey]，关键词列表模式下存于 [key]。
+  static String _effectiveBanWord(String regexKey, String key) {
+    final regex = _setting.get(regexKey, defaultValue: '');
+    return regex.isNotEmpty ? regex : _setting.get(key, defaultValue: '');
+  }
 
-  static String get banWordForReply =>
-      _setting.get(SettingBoxKey.banWordForReply, defaultValue: '');
+  static String get banWordForRecommend => _effectiveBanWord(
+    SettingBoxKey.banWordRegexForRecommend,
+    SettingBoxKey.banWordForRecommend,
+  );
 
-  static String get banWordForZone =>
-      _setting.get(SettingBoxKey.banWordForZone, defaultValue: '');
+  static String get banWordForReply => _effectiveBanWord(
+    SettingBoxKey.banWordRegexForReply,
+    SettingBoxKey.banWordForReply,
+  );
+
+  static String get banWordForZone => _effectiveBanWord(
+    SettingBoxKey.banWordRegexForZone,
+    SettingBoxKey.banWordForZone,
+  );
 
   static bool get appRcmd =>
       _setting.get(SettingBoxKey.appRcmd, defaultValue: true);
@@ -633,8 +647,10 @@ abstract final class Pref {
     return horizontalScreen;
   }
 
-  static String get banWordForDyn =>
-      _setting.get(SettingBoxKey.banWordForDyn, defaultValue: '');
+  static String get banWordForDyn => _effectiveBanWord(
+    SettingBoxKey.banWordRegexForDyn,
+    SettingBoxKey.banWordForDyn,
+  );
 
   static bool get enableLog =>
       _setting.get(SettingBoxKey.enableLog, defaultValue: true);

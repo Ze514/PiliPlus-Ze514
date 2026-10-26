@@ -96,6 +96,7 @@ List<SettingsModel> get replySettings => [
   getBanWordModel(
     title: '评论关键词过滤',
     key: SettingBoxKey.banWordForReply,
+    regexKey: SettingBoxKey.banWordRegexForReply,
     onChanged: (value) {
       ReplyGrpc.replyRegExp = value;
       ReplyGrpc.enableFilter = value.pattern.isNotEmpty;

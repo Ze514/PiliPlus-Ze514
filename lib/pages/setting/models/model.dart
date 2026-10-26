@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/stateful_builder.dart';
 import 'package:PiliPlus/models/common/enum_with_label.dart';
 import 'package:PiliPlus/pages/setting/widgets/normal_item.dart';
 import 'package:PiliPlus/pages/setting/widgets/popup_item.dart';
@@ -8,7 +9,8 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart' hide PopupMenuItemSelected;
+import 'package:material_ui/material_ui.dart'
+    hide PopupMenuItemSelected, StatefulBuilder;
 
 @immutable
 sealed class SettingsModel {
@@ -206,65 +208,220 @@ class SwitchModel extends SettingsModel {
   );
 }
 
+/// 旧版本把 banWord 整串当作正则使用，含这些元字符的配置迁移为正则模式，
+/// 否则升级后会从「正则匹配」变成「纯文本匹配」而静默失效
+final _legacyRegexMeta = RegExp(r'[\\^$.?*+()\[\]{}]');
+
 SettingsModel getBanWordModel({
   required String title,
   required String key,
   required ValueChanged<RegExp> onChanged,
   String? banScope,
+  String? regexKey,
 }) {
   String banWord = GStorage.setting.get(key, defaultValue: '');
+  String rawRegex = regexKey == null
+      ? ''
+      : GStorage.setting.get(regexKey, defaultValue: '');
+  bool isRegex = rawRegex.isNotEmpty;
+
+  if (regexKey != null &&
+      !isRegex &&
+      banWord.isNotEmpty &&
+      _legacyRegexMeta.hasMatch(banWord)) {
+    rawRegex = banWord;
+    banWord = '';
+    isRegex = true;
+    GStorage.setting
+      ..put(regexKey, rawRegex)
+      ..put(key, '');
+  }
+
   return NormalModel(
     leading: const Icon(Icons.filter_alt_outlined),
     title: title,
     getSubtitle: () {
-      final subtitle = banWord.isEmpty ? "点击添加" : banWord;
+      final display = isRegex ? rawRegex : banWord;
+      final subtitle = display.isEmpty ? '点击添加' : display;
       if (banScope != null) {
         return '作用域: $banScope\n$subtitle';
       }
       return subtitle;
     },
     onTap: (context, setState) {
-      String editValue = banWord;
+      final keywords = banWord
+          .split(RegExp(r'[\n|]'))
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final regexController = TextEditingController(text: rawRegex);
+      final keywordController = TextEditingController();
+      final listController = ScrollController();
+
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          constraints: Style.dialogFixedConstraints,
-          title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('使用|隔开，如：尝试|测试'),
-              TextFormField(
-                autofocus: true,
-                initialValue: editValue,
-                textInputAction: TextInputAction.newline,
-                minLines: 1,
-                maxLines: 4,
-                onChanged: (value) => editValue = value,
+        builder: (context) => StatefulBuilder(
+          onDispose: () {
+            regexController.dispose();
+            keywordController.dispose();
+            listController.dispose();
+          },
+          builder: (context, setDialogState) {
+            void addKeyword() {
+              final text = keywordController.text.trim();
+              if (text.isEmpty || keywords.contains(text)) {
+                return;
+              }
+              if (text.contains('|') || text.contains('\n')) {
+                SmartDialog.showToast('关键词不能包含「|」或换行符');
+                return;
+              }
+              setDialogState(() {
+                keywords.add(text);
+                keywordController.clear();
+              });
+            }
+
+            final Widget body = isRegex
+                ? TextField(
+                    controller: regexController,
+                    autofocus: true,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: '输入正则表达式',
+                      border: OutlineInputBorder(),
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (keywords.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: Text('暂无关键词')),
+                        )
+                      else
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: Scrollbar(
+                            controller: listController,
+                            thumbVisibility: true,
+                            child: ListView.builder(
+                              controller: listController,
+                              shrinkWrap: true,
+                              itemCount: keywords.length,
+                              itemBuilder: (context, index) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.label_outline),
+                                title: Text(keywords[index]),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.close),
+                                  tooltip: '删除',
+                                  onPressed: () => setDialogState(
+                                    () => keywords.removeAt(index),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: keywordController,
+                              autofocus: true,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => addKeyword(),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                hintText: '输入关键词后点击添加',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filled(
+                            onPressed: addKeyword,
+                            icon: const Icon(Icons.add),
+                            tooltip: '添加',
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+
+            return AlertDialog(
+              constraints: Style.dialogFixedConstraints,
+              title: Text(title),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (regexKey != null)
+                    Row(
+                      children: [
+                        const Expanded(child: Text('正则模式（高级）')),
+                        Switch(
+                          value: isRegex,
+                          onChanged: (v) => setDialogState(() {
+                            isRegex = v;
+                          }),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
+                  body,
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(color: ColorScheme.of(context).outline),
-              ),
-            ),
-            TextButton(
-              child: const Text('保存'),
-              onPressed: () {
-                Get.back();
-                banWord = editValue;
-                setState();
-                onChanged(RegExp(banWord, caseSensitive: false));
-                SmartDialog.showToast('已保存');
-                GStorage.setting.put(key, banWord);
-              },
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: Get.back,
+                  child: Text(
+                    '取消',
+                    style: TextStyle(color: ColorScheme.of(context).outline),
+                  ),
+                ),
+                TextButton(
+                  child: const Text('保存'),
+                  onPressed: () {
+                    final RegExp regExp;
+                    if (isRegex) {
+                      final newRegex = regexController.text.trim();
+                      try {
+                        regExp = RegExp(newRegex, caseSensitive: false);
+                      } catch (e) {
+                        // 校验失败时保持对话框打开，避免输入内容丢失
+                        SmartDialog.showToast('正则表达式错误：$e');
+                        return;
+                      }
+                      rawRegex = newRegex;
+                      if (regexKey != null) {
+                        GStorage.setting.put(regexKey, rawRegex);
+                      }
+                    } else {
+                      banWord = keywords.join('|');
+                      regExp = RegExp(
+                        keywords.map(RegExp.escape).join('|'),
+                        caseSensitive: false,
+                      );
+                      GStorage.setting.put(key, banWord);
+                      if (regexKey != null) {
+                        GStorage.setting.put(regexKey, '');
+                      }
+                    }
+                    Get.back();
+                    setState();
+                    onChanged(regExp);
+                    SmartDialog.showToast('已保存');
+                  },
+                ),
+              ],
+            );
+          },
         ),
       );
     },
