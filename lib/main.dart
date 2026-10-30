@@ -88,14 +88,20 @@ Future<void> _initDownPath() async {
       AndroidDownloadPath.latest = resolution;
       downloadPath = resolution.path;
       if (resolution.droppedCustomPath != null) {
-        // 与桌面端一致：自定义路径失效后清掉设置，避免每次启动都静默回退
-        await GStorage.setting.delete(SettingBoxKey.androidDownloadPath);
+        // 只有规范化失败（路径无效）才清理设置；不可写/没权限要保留用户的
+        // 选择，等重新授权后继续生效。清理失败也不能影响已解析出的路径。
+        try {
+          await GStorage.setting.delete(SettingBoxKey.androidDownloadPath);
+        } catch (e) {
+          if (kDebugMode) debugPrint('clean invalid download path error: $e');
+        }
       }
       if (kDebugMode && resolution.fallbackReason != null) {
         debugPrint('download path fallback: ${resolution.fallbackReason}');
       }
     } catch (e) {
       // 目录解析异常（例如 path_provider 取不到外部目录）时退回 App 私有目录
+      AndroidDownloadPath.latest = null;
       downloadPath = defDownloadPath;
       if (kDebugMode) debugPrint('download path resolve error: $e');
     }

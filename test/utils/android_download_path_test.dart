@@ -295,5 +295,66 @@ void main() {
       expect(resolution.source, AndroidDownPathSource.legacy);
       expect(resolution.fallbackReason, contains('权限'));
     });
+
+    test('自定义路径不可用但合法时保留设置，只在不能规范化时丢弃', () async {
+      // 无权限/不可写都属「本次没生效」，不能删用户设置
+      final kept = await AndroidDownloadPath.resolve(
+        externalStorageDir: _pkgFiles,
+        customPath: '/storage/emulated/0/Download/Movies',
+        keepOnUninstall: true,
+        fallbackPath: '/fallback/download',
+        sdkInt: 34,
+      );
+      expect(kept.droppedCustomPath, isNull);
+      expect(kept.fallbackReason, isNotNull);
+
+      // 规范化失败（不在共享存储内）才算无效设置，交给调用方清理
+      final dropped = await AndroidDownloadPath.resolve(
+        externalStorageDir: _pkgFiles,
+        customPath: '/storage/ABCD-1234/PiliPlus',
+        keepOnUninstall: true,
+        fallbackPath: '/fallback/download',
+        sdkInt: 34,
+      );
+      expect(dropped.droppedCustomPath, '/storage/ABCD-1234/PiliPlus');
+    });
+  });
+
+  group('missingPermissionReason', () {
+    test('API 24–28 说存储权限，API 29 说系统不支持，API 30+ 说所有文件访问', () {
+      expect(AndroidDownloadPath.missingPermissionReason(24), contains('存储权限'));
+      expect(AndroidDownloadPath.missingPermissionReason(28), contains('存储权限'));
+      expect(
+        AndroidDownloadPath.missingPermissionReason(29),
+        contains('不支持'),
+      );
+      expect(
+        AndroidDownloadPath.missingPermissionReason(30),
+        contains('所有文件访问'),
+      );
+      expect(
+        AndroidDownloadPath.missingPermissionReason(37),
+        contains('所有文件访问'),
+      );
+    });
+  });
+
+  group('sharedStorageDocumentUri 卷限制', () {
+    test('只有主共享存储才是 primary，其它卷返回 null 走复制路径', () {
+      expect(
+        AndroidDownloadPath.sharedStorageDocumentUri(
+          '/storage/ABCD-1234/PiliPlus',
+          sharedRoot: '/storage/ABCD-1234',
+        ),
+        isNull,
+      );
+      expect(
+        AndroidDownloadPath.sharedStorageDocumentUri(
+          '/storage/emulated/0/Download/PiliPlus',
+          sharedRoot: '/storage/emulated/0',
+        ),
+        contains('primary%3ADownload%2FPiliPlus'),
+      );
+    });
   });
 }

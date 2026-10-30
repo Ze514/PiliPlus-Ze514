@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
-import 'dart:io' show Directory, File;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/download.dart';
@@ -17,8 +17,10 @@ import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/services/download/download_manager.dart';
+import 'package:PiliPlus/utils/android_download_path.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/danmaku_utils.dart';
+import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/file_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -29,6 +31,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart'
+    show getExternalStorageDirectory;
 import 'package:synchronized/synchronized.dart';
 
 // ref https://github.com/10miaomiao/bilimiao2/blob/master/bilimiao-download/src/main/java/cn/a10miaomiao/bilimiao/download/DownloadService.kt
@@ -175,7 +179,7 @@ class DownloadService extends GetxService {
       pageData: pageData,
       seasonInfo: seasonInfo,
     );
-    _createDownload(entry);
+    _enqueueDownload(entry);
   }
 
   void downloadBangumi({
@@ -246,7 +250,49 @@ class DownloadService extends GetxService {
       ownerName: pgcItem.upInfo?.uname,
       pageData: null,
     );
-    _createDownload(entry);
+    _enqueueDownload(entry);
+  }
+
+  /// 下载前重新确认缓存目录可用；失权/不可写时按设置重新解析并回退
+  Future<void> _ensureDownloadPathUsable() async {
+    if (!Platform.isAndroid) return;
+    try {
+      if (await AndroidDownloadPath.isWritable(downloadPath)) return;
+      final resolution = await AndroidDownloadPath.resolve(
+        externalStorageDir: (await getExternalStorageDirectory())?.path,
+        customPath: Pref.androidDownloadPath,
+        keepOnUninstall: Pref.keepDownPathOnUninstall,
+        fallbackPath: defDownloadPath,
+        sdkInt: DeviceUtils.sdkInt,
+      );
+      AndroidDownloadPath.latest = resolution;
+      final changed = resolution.path != downloadPath;
+      if (changed) {
+        downloadPath = resolution.path;
+        initDownloadList();
+        await waitForInitialization;
+        flagNotifier.refresh();
+      }
+      SmartDialog.showToast(
+        changed
+            ? '缓存目录不可写，已回退到：${resolution.path}，请在设置中重新授权'
+            : '缓存目录不可写，请在设置中重新授权或更换路径',
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('download path revalidate error: $e');
+      SmartDialog.showToast('缓存目录校验失败，请到设置中检查缓存路径');
+    }
+  }
+
+  /// 入队并创建下载；异常时给出可读提示而不是静默失败
+  Future<void> _enqueueDownload(BiliDownloadEntryInfo entry) async {
+    await _ensureDownloadPathUsable();
+    try {
+      await _createDownload(entry);
+    } catch (e) {
+      if (kDebugMode) debugPrint('create download error: $e');
+      SmartDialog.showToast('下载未能开始：缓存目录不可写或已失权，请到设置中检查');
+    }
   }
 
   Future<void> _createDownload(BiliDownloadEntryInfo entry) async {

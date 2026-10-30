@@ -125,17 +125,17 @@ abstract final class AndroidDownloadPath {
 
   /// 生成交给系统文件管理器打开共享存储目录的 DocumentsUI URI。
   ///
-  /// 只支持主共享存储内的目录，其余情况返回 null。
+  /// DocumentsUI 的 `primary` 卷只对应主共享存储（`/storage/emulated/0`），
+  /// 因此其它卷一律返回 null，由调用方退化为复制路径。
   static String? sharedStorageDocumentUri(
     String? dirPath, {
     String? sharedRoot,
   }) {
-    final normalized = normalizeCustomPath(dirPath, sharedRoot: sharedRoot);
+    final root = _sharedRootOr(sharedRoot);
+    if (root != defaultSharedRoot) return null;
+    final normalized = normalizeCustomPath(dirPath, sharedRoot: root);
     if (normalized == null) return null;
-    final relative = p.posix.relative(
-      normalized,
-      from: _sharedRootOr(sharedRoot),
-    );
+    final relative = p.posix.relative(normalized, from: root);
     final documentId = Uri.encodeComponent('primary:$relative');
     return 'content://com.android.externalstorage.documents/document/'
         '$documentId';
@@ -143,6 +143,15 @@ abstract final class AndroidDownloadPath {
 
   /// 系统版本是否有可能直写共享存储（API 29 是无解区间）。
   static bool supportsPublicStorage(int sdkInt) => sdkInt < 29 || sdkInt >= 30;
+
+  /// 拿不到公共目录写权限时的可读原因；API 29 说明系统限制。
+  static String missingPermissionReason(int sdkInt) {
+    if (!supportsPublicStorage(sdkInt)) {
+      return '当前系统不支持卸载保留缓存，已回退';
+    }
+    // API 24–28 是运行时存储权限，API 30+ 才是「所有文件访问」
+    return sdkInt < 29 ? '未获得存储权限，已回退' : '未获得「所有文件访问」权限，已回退';
+  }
 
   /// 「卸载时保留缓存」开关的说明文案。
   static String keepOnUninstallSubtitle(int sdkInt) {
@@ -165,18 +174,49 @@ abstract final class AndroidDownloadPath {
   // -------------------------------------------------------------------- IO
 
   /// 创建目录并写入探针文件，确认真实可写。
+  ///
+  /// 探针无论成功与否都会在 finally 中删除（删除失败忽略）；失败时再尝试
+  /// 清理一次，并回收本次新建的空目录，尽量不在用户目录里留下垃圾。
   static Future<bool> isWritable(String dirPath) async {
+    var createdDir = false;
     try {
       final dir = Directory(dirPath);
       if (!dir.existsSync()) {
         await dir.create(recursive: true);
+        createdDir = true;
       }
       final probe = File(p.posix.join(dir.path, _probeFileName));
-      await probe.writeAsString('piliplus', flush: true);
-      await probe.delete();
+      try {
+        await probe.writeAsString('piliplus', flush: true);
+      } finally {
+        try {
+          await probe.delete();
+        } catch (_) {
+          // 删除探针失败不影响可写结论
+        }
+      }
       return true;
     } catch (_) {
+      await _tryCleanProbe(dirPath);
+      if (createdDir) {
+        try {
+          await Directory(dirPath).delete();
+        } catch (_) {
+          // 目录可能已被其它写入使用，清理失败忽略
+        }
+      }
       return false;
+    }
+  }
+
+  static Future<void> _tryCleanProbe(String dirPath) async {
+    try {
+      final probe = File(p.posix.join(dirPath, _probeFileName));
+      if (probe.existsSync()) {
+        await probe.delete();
+      }
+    } catch (_) {
+      // 清理失败忽略，不能因此判定为可写或抛给调用方
     }
   }
 
@@ -220,6 +260,11 @@ abstract final class AndroidDownloadPath {
   ///
   /// 每一级都先校验再使用：自定义路径不合法或不可写、开关推导位置拿不到
   /// 权限或不可写，都会逐级回退，最终落到 [legacyPath]，不会抛出异常。
+  ///
+  /// [AndroidDownPathResolution.droppedCustomPath] 只在自定义路径规范化失败
+  /// （相对路径、不在共享存储内）时返回，调用方据此清理设置；仅仅是不可写
+  /// 或没权限时保留用户设置，只通过 [AndroidDownPathResolution.fallbackReason]
+  /// 说明当次为何没生效。
   static Future<AndroidDownPathResolution> resolve({
     required String fallbackPath,
     String? externalStorageDir,
@@ -246,8 +291,12 @@ abstract final class AndroidDownloadPath {
     if (customPath != null && customPath.trim().isNotEmpty) {
       final custom = normalizeCustomPath(customPath, sharedRoot: sharedRoot);
       if (custom == null) {
+        // 只有规范化失败（相对路径/不在共享存储内）才算无效设置，
+        // 由调用方清理；不可写或没权限只记录原因，保留用户设置
         droppedCustomPath = customPath;
         fallbackReason = '自定义缓存路径不在共享存储内，已回退';
+      } else if (!await hasPublicStorageAccess(sdkInt: sdkInt)) {
+        fallbackReason = missingPermissionReason(sdkInt);
       } else if (await isWritable(custom)) {
         return AndroidDownPathResolution(
           path: custom,
@@ -256,16 +305,16 @@ abstract final class AndroidDownloadPath {
           sharedRoot: sharedRoot,
         );
       } else {
-        droppedCustomPath = customPath;
         fallbackReason = '自定义缓存路径不可写，已回退';
       }
     }
 
     // 2. 开关推导出的卸载保留位置
-    if (!supportsPublicStorage(sdkInt)) {
-      fallbackReason ??= '当前系统不支持卸载保留缓存，已回退';
-    } else if (!await hasPublicStorageAccess(sdkInt: sdkInt)) {
-      fallbackReason ??= '未获得共享存储写入权限，已回退';
+    final accessible =
+        supportsPublicStorage(sdkInt) &&
+        await hasPublicStorageAccess(sdkInt: sdkInt);
+    if (!accessible) {
+      fallbackReason ??= missingPermissionReason(sdkInt);
     } else {
       final keptPath = keptDownloadPath(sharedRoot);
       if (await isWritable(keptPath)) {
