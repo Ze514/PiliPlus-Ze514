@@ -15,6 +15,7 @@ import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/utils/android_download_path.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/desktop/calc_window_position.dart';
@@ -74,10 +75,30 @@ Future<void> _initDownPath() async {
       downloadPath = defDownloadPath;
     }
   } else if (Platform.isAndroid) {
-    final externalStorageDirPath = (await getExternalStorageDirectory())?.path;
-    downloadPath = externalStorageDirPath != null
-        ? path.join(externalStorageDirPath, PathUtils.downloadDir)
-        : defDownloadPath;
+    // 优先级：自定义路径 > 「卸载时保留缓存」推导出的共享目录 > 现状私有目录，
+    // 每一级失败都会回退，最终落到 Android/data/<applicationId>/files/download
+    try {
+      final resolution = await AndroidDownloadPath.resolve(
+        externalStorageDir: (await getExternalStorageDirectory())?.path,
+        customPath: Pref.androidDownloadPath,
+        keepOnUninstall: Pref.keepDownPathOnUninstall,
+        fallbackPath: defDownloadPath,
+        sdkInt: DeviceUtils.sdkInt,
+      );
+      AndroidDownloadPath.latest = resolution;
+      downloadPath = resolution.path;
+      if (resolution.droppedCustomPath != null) {
+        // 与桌面端一致：自定义路径失效后清掉设置，避免每次启动都静默回退
+        await GStorage.setting.delete(SettingBoxKey.androidDownloadPath);
+      }
+      if (kDebugMode && resolution.fallbackReason != null) {
+        debugPrint('download path fallback: ${resolution.fallbackReason}');
+      }
+    } catch (e) {
+      // 目录解析异常（例如 path_provider 取不到外部目录）时退回 App 私有目录
+      downloadPath = defDownloadPath;
+      if (kDebugMode) debugPrint('download path resolve error: $e');
+    }
   } else {
     downloadPath = defDownloadPath;
   }

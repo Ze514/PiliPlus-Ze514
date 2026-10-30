@@ -1057,6 +1057,16 @@ abstract final class Pref {
 
   static String? get downloadPath => _setting.get(SettingBoxKey.downloadPath);
 
+  /// 安卓端自定义离线缓存路径，必须位于共享存储内
+  static String? get androidDownloadPath =>
+      _setting.get(SettingBoxKey.androidDownloadPath);
+
+  /// 安卓端：卸载时保留缓存，默认开启
+  static bool get keepDownPathOnUninstall => _setting.get(
+    SettingBoxKey.keepDownPathOnUninstall,
+    defaultValue: true,
+  );
+
   static String? get imageSavePath => _setting.get(SettingBoxKey.imageSavePath);
 
   static String? get emotePath => _setting.get(SettingBoxKey.emotePath);

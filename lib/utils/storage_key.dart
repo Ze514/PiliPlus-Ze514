@@ -152,6 +152,8 @@ abstract final class SettingBoxKey {
       enableTapDm = 'enableTapDm',
       setSystemBrightness = 'setSystemBrightness',
       downloadPath = 'downloadPath',
+      androidDownloadPath = 'androidDownloadPath',
+      keepDownPathOnUninstall = 'keepDownPathOnUninstall',
       imageSavePath = 'imageSavePath',
       emotePath = 'emotePath',
       emoteDownAll = 'emoteDownAll',

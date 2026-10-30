@@ -1,6 +1,7 @@
 import 'dart:io' show Platform, Directory;
 
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
+import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart'
     show RefreshIndicator, displacement, refreshDragExtent;
@@ -20,7 +21,9 @@ import 'package:PiliPlus/pages/setting/widgets/slider_dialog.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
+import 'package:PiliPlus/utils/android_download_path.dart';
 import 'package:PiliPlus/utils/desktop/window_controller.dart';
+import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/filtering_text.dart';
@@ -38,6 +41,8 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart' hide RefreshIndicator;
+import 'package:path_provider/path_provider.dart' show getExternalStorageDirectory;
+import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
 
 List<SettingsModel> get extraSettings => [
   if (PlatformUtils.isDesktop) ...[
@@ -70,7 +75,7 @@ List<SettingsModel> get extraSettings => [
         onTap: _showWebTabMaxDialog,
       ),
     ],
-  ] else if (Platform.isAndroid)
+  ] else if (Platform.isAndroid) ...[
     SwitchModel(
       title: '允许三方APP访问私有存储',
       subtitle: '允许三方APP（例如MT管理器）通过访问外部存储的方式访问私有存储下的文件',
@@ -79,6 +84,21 @@ List<SettingsModel> get extraSettings => [
       defaultVal: Pref.enableDocProvider,
       onChanged: AndroidHelper.updateDocProvider,
     ),
+    NormalModel(
+      title: '卸载时保留缓存',
+      subtitle: AndroidDownloadPath.keepOnUninstallSubtitle(
+        DeviceUtils.sdkInt,
+      ),
+      leading: const Icon(Icons.save_alt),
+      getTrailing: (_) => const _KeepCacheSwitch(),
+    ),
+    const NormalModel(
+      title: '离线缓存路径',
+      getSubtitle: _androidDownPathSubtitle,
+      leading: Icon(Icons.folder_outlined),
+      onTap: _showAndroidDownPathDialog,
+    ),
+  ],
   SplitModel(
     normalModel: const NormalModel.split(
       title: '空降助手',
@@ -373,6 +393,338 @@ void _showDownPathDialog(BuildContext context, VoidCallback setState) {
         ),
       ],
     ),
+  );
+}
+
+// ------------------------------------------------ 安卓离线缓存路径
+
+/// 设置页副标题：当前实际路径，发生回退或自定义路径暂停时追加说明
+String _androidDownPathSubtitle() {
+  final reason = AndroidDownloadPath.latest?.fallbackReason;
+  if (reason != null) return '$downloadPath（$reason）';
+  if (!Pref.keepDownPathOnUninstall && Pref.androidDownloadPath != null) {
+    return '$downloadPath（已关闭卸载保留，自定义路径暂停生效）';
+  }
+  return downloadPath;
+}
+
+bool _isDownloading() {
+  if (!Get.isRegistered<DownloadService>()) return false;
+  final service = Get.find<DownloadService>();
+  return service.curDownload.value?.status.isDownloading == true ||
+      service.waitDownloadQueue.isNotEmpty;
+}
+
+/// 按当前设置重新解析缓存目录，并刷新下载列表
+Future<AndroidDownPathResolution?> _refreshAndroidDownPath() async {
+  final resolution = await AndroidDownloadPath.resolve(
+    externalStorageDir: (await getExternalStorageDirectory())?.path,
+    customPath: Pref.androidDownloadPath,
+    keepOnUninstall: Pref.keepDownPathOnUninstall,
+    fallbackPath: defDownloadPath,
+    sdkInt: DeviceUtils.sdkInt,
+  );
+  AndroidDownloadPath.latest = resolution;
+  downloadPath = resolution.path;
+  if (resolution.droppedCustomPath != null) {
+    await GStorage.setting.delete(SettingBoxKey.androidDownloadPath);
+  }
+  if (Get.isRegistered<DownloadService>()) {
+    Get.find<DownloadService>().initDownloadList();
+  }
+  return resolution;
+}
+
+/// 应用「卸载时保留缓存」：重新解析路径并刷新下载列表
+Future<void> _applyKeepCacheOnUninstall(bool value) async {
+  String? warning;
+  if (value) {
+    final granted = await AndroidDownloadPath.requestPublicStorageAccess(
+      sdkInt: DeviceUtils.sdkInt,
+    );
+    if (!granted) {
+      warning = AndroidDownloadPath.supportsPublicStorage(DeviceUtils.sdkInt)
+          ? '未获得「所有文件访问」权限，缓存仍写入应用私有目录'
+          : 'Android 10 无法直写公共目录，缓存仍写入应用私有目录';
+    }
+  }
+  final resolution = await _refreshAndroidDownPath();
+  SmartDialog.showToast(
+    warning ?? '缓存路径：${resolution?.path ?? downloadPath}（旧缓存不会自动迁移）',
+  );
+}
+
+/// 「卸载时保留缓存」开关：下载中拒绝切换，开关保持原值
+class _KeepCacheSwitch extends StatefulWidget {
+  const _KeepCacheSwitch();
+
+  @override
+  State<_KeepCacheSwitch> createState() => _KeepCacheSwitchState();
+}
+
+class _KeepCacheSwitchState extends State<_KeepCacheSwitch> {
+  bool get _value => Pref.keepDownPathOnUninstall;
+
+  Future<void> _onChanged(bool value) async {
+    if (_isDownloading()) {
+      // 不落盘，并立即按原值重建，保证「下载中禁止切换」
+      if (mounted) setState(() {});
+      SmartDialog.showToast('有任务正在下载，已保持原设置，请暂停后再切换');
+      return;
+    }
+    await GStorage.setting.put(SettingBoxKey.keepDownPathOnUninstall, value);
+    if (!mounted) return;
+    setState(() {});
+    await _applyKeepCacheOnUninstall(value);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Switch(value: _value, onChanged: _onChanged);
+  }
+}
+
+void _showAndroidDownPathDialog(BuildContext context, VoidCallback setState) {
+  final latest = AndroidDownloadPath.latest;
+  final canGrant =
+      Pref.keepDownPathOnUninstall &&
+      latest?.isKept != true &&
+      AndroidDownloadPath.supportsPublicStorage(DeviceUtils.sdkInt);
+  showDialog(
+    context: context,
+    // 不复用 builder 的 context：对话框关闭后回调还需要页面 context
+    builder: (_) => SimpleDialog(
+      clipBehavior: Clip.hardEdge,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      children: [
+        if (latest?.fallbackReason case final reason?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+              reason,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
+        DialogOption(
+          onPressed: () {
+            Get.back();
+            _openAndroidDownPath(downloadPath);
+          },
+          child: const Text('打开'),
+        ),
+        DialogOption(
+          onPressed: () {
+            Get.back();
+            Utils.copyText(downloadPath);
+          },
+          child: const Text('复制', style: TextStyle(fontSize: 14)),
+        ),
+        DialogOption(
+          onPressed: () {
+            Get.back();
+            _resetAndroidDownPath(context, setState);
+          },
+          child: const Text('重置', style: TextStyle(fontSize: 14)),
+        ),
+        DialogOption(
+          onPressed: () {
+            Get.back();
+            _setAndroidDownPath(context, setState);
+          },
+          child: const Text('设置新路径', style: TextStyle(fontSize: 14)),
+        ),
+        DialogOption(
+          onPressed: () {
+            Get.back();
+            _pickAndroidDownPath(context, setState);
+          },
+          child: const Text('选择目录', style: TextStyle(fontSize: 14)),
+        ),
+        if (canGrant)
+          DialogOption(
+            onPressed: () {
+              Get.back();
+              _grantAndroidDownPath(context, setState);
+            },
+            child: const Text('授权所有文件访问', style: TextStyle(fontSize: 14)),
+          ),
+      ],
+    ),
+  );
+}
+
+/// 安卓端打开目录：共享存储目录交给系统文件管理器，
+/// 私有目录等无法直接打开时退化为复制路径
+Future<void> _openAndroidDownPath(String dirPath) async {
+  final uri = AndroidDownloadPath.sharedStorageDocumentUri(dirPath);
+  var opened = false;
+  if (uri != null) {
+    try {
+      opened = await launchUrl(
+        Uri.parse(uri),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      // 系统没有能处理该 URI 的文件管理器时退化为复制路径
+      opened = false;
+    }
+  }
+  if (opened) return;
+  await Utils.copyText(dirPath, toastText: '已复制路径，请在文件管理器中打开');
+}
+
+Future<void> _grantAndroidDownPath(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final granted = await AndroidDownloadPath.requestPublicStorageAccess(
+    sdkInt: DeviceUtils.sdkInt,
+  );
+  if (!context.mounted) return;
+  if (!granted) {
+    SmartDialog.showToast('未获得「所有文件访问」权限，缓存仍写入应用私有目录');
+    return;
+  }
+  final resolution = await _refreshAndroidDownPath();
+  setState();
+  SmartDialog.showToast('缓存路径：${resolution?.path ?? downloadPath}');
+}
+
+Future<void> _resetAndroidDownPath(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  if (_isDownloading()) {
+    SmartDialog.showToast('有任务正在下载，请暂停后再切换缓存路径');
+    return;
+  }
+  if (Pref.androidDownloadPath == null) {
+    SmartDialog.showToast('已是默认路径：$downloadPath');
+    return;
+  }
+  final confirmed = await showConfirmDialog(
+    context: context,
+    title: const Text('旧缓存不会自动迁移'),
+    content: const Text('已缓存内容不会自动迁移，确定恢复默认缓存路径？'),
+  );
+  if (!confirmed || !context.mounted) return;
+  await GStorage.setting.delete(SettingBoxKey.androidDownloadPath);
+  final resolution = await _refreshAndroidDownPath();
+  setState();
+  SmartDialog.showToast('缓存路径：${resolution?.path ?? downloadPath}');
+}
+
+Future<void> _setAndroidDownPath(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  if (_isDownloading()) {
+    SmartDialog.showToast('有任务正在下载，请暂停后再切换缓存路径');
+    return;
+  }
+  final sharedRoot = AndroidDownloadPath.sharedRootFromExternalStorageDir(
+    (await getExternalStorageDirectory())?.path,
+  );
+  if (!context.mounted) return;
+  var input = downloadPath;
+  final raw = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      clipBehavior: Clip.hardEdge,
+      title: const Text('设置缓存路径'),
+      content: TextFormField(
+        initialValue: input,
+        autofocus: true,
+        onChanged: (value) => input = value,
+        decoration: InputDecoration(
+          hintText: AndroidDownloadPath.keptDownloadPath(sharedRoot),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: Get.back, child: const Text('取消')),
+        TextButton(
+          onPressed: () => Get.back<String>(result: input),
+          child: const Text('确定'),
+        ),
+      ],
+    ),
+  );
+  if (raw == null || !context.mounted) return;
+  await _applyAndroidCustomPath(context, setState, raw);
+}
+
+/// 通过系统目录选择器设置路径；SAF 无法映射成文件路径时提示手输
+Future<void> _pickAndroidDownPath(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  if (_isDownloading()) {
+    SmartDialog.showToast('有任务正在下载，请暂停后再切换缓存路径');
+    return;
+  }
+  final current = Directory(downloadPath);
+  final picked = await FilePicker.getDirectoryPath(
+    dialogTitle: '选择缓存目录',
+    initialDirectory: current.existsSync() ? downloadPath : null,
+  );
+  if (!context.mounted) return;
+  if (picked == null) {
+    // 用户取消，或 SAF 返回的目录无法映射为可直写的文件路径
+    return;
+  }
+  await _applyAndroidCustomPath(context, setState, picked);
+}
+
+/// 校验并应用自定义缓存路径：不可写时保持原路径并明确提示
+Future<void> _applyAndroidCustomPath(
+  BuildContext context,
+  VoidCallback setState,
+  String rawPath,
+) async {
+  final sharedRoot = AndroidDownloadPath.sharedRootFromExternalStorageDir(
+    (await getExternalStorageDirectory())?.path,
+  );
+  final target = AndroidDownloadPath.normalizeCustomPath(
+    rawPath,
+    sharedRoot: sharedRoot,
+  );
+  if (target == null) {
+    SmartDialog.showToast(
+      '路径无效：必须位于共享存储内，例如 '
+      '${AndroidDownloadPath.keptDownloadPath(sharedRoot)}',
+    );
+    return;
+  }
+  if (!await AndroidDownloadPath.isWritable(target)) {
+    SmartDialog.showToast('路径不可写，仍使用当前路径：$downloadPath');
+    return;
+  }
+  if (target == downloadPath && Pref.keepDownPathOnUninstall) return;
+  if (!context.mounted) return;
+  final confirmed = await showConfirmDialog(
+    context: context,
+    title: const Text('旧缓存不会自动迁移'),
+    content: Text('已缓存内容不会自动迁移，确定切换到 $target ？'),
+  );
+  if (!confirmed || !context.mounted) return;
+  // 自定义路径只在开启「卸载时保留缓存」时生效，这里顺带打开开关
+  final needEnableSwitch = !Pref.keepDownPathOnUninstall;
+  if (needEnableSwitch) {
+    await GStorage.setting.put(SettingBoxKey.keepDownPathOnUninstall, true);
+    await AndroidDownloadPath.requestPublicStorageAccess(
+      sdkInt: DeviceUtils.sdkInt,
+    );
+  }
+  await GStorage.setting.put(SettingBoxKey.androidDownloadPath, target);
+  final resolution = await _refreshAndroidDownPath();
+  setState();
+  SmartDialog.showToast(
+    '缓存路径：${resolution?.path ?? downloadPath}'
+    '${needEnableSwitch ? '（已开启「卸载时保留缓存」）' : ''}',
   );
 }
 
