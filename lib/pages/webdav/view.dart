@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/view_insets_safe_area.dart';
 import 'package:PiliPlus/pages/webdav/webdav.dart';
@@ -34,6 +35,21 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
     _passwordCtr.dispose();
     _directoryCtr.dispose();
     super.dispose();
+  }
+
+  Future<void> _restore(BuildContext context) async {
+    final confirmed = await showConfirmDialog(
+      context: context,
+      title: const Text('恢复设置'),
+      content: const Text(
+        '将用云端备份覆盖本机的设置与视频设置，备份中的评论记录会合并导入。\n'
+        '恢复前会在本机保存一份当前设置快照，误操作时可手工回滚。\n'
+        '是否继续？',
+      ),
+    );
+    if (confirmed) {
+      await WebDav().restore();
+    }
   }
 
   @override
@@ -91,32 +107,50 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonal(
-                    style: FilledButton.styleFrom(
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: Style.mdRadius,
+            Text(
+              '备份内容：设置、视频设置与评论记录（不含 WebDAV 账号密码）',
+              style: TextStyle(
+                fontSize: 12,
+                color: ColorScheme.of(context).outline,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ValueListenableBuilder<WebDavTask?>(
+              valueListenable: WebDav().task,
+              builder: (context, task, _) {
+                final busy = task != null;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.tonal(
+                        style: FilledButton.styleFrom(
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: Style.mdRadius,
+                          ),
+                        ),
+                        onPressed: busy ? null : WebDav().backup,
+                        child: Text(
+                          task == WebDavTask.backup ? '备份中…' : '备份设置',
+                        ),
                       ),
                     ),
-                    onPressed: WebDav().backup,
-                    child: const Text('备份设置'),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: FilledButton.tonal(
-                    style: FilledButton.styleFrom(
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: Style.mdRadius,
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: FilledButton.tonal(
+                        style: FilledButton.styleFrom(
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: Style.mdRadius,
+                          ),
+                        ),
+                        onPressed: busy ? null : () => _restore(context),
+                        child: Text(
+                          task == WebDavTask.restore ? '恢复中…' : '恢复设置',
+                        ),
                       ),
                     ),
-                    onPressed: WebDav().restore,
-                    child: const Text('恢复设置'),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ],
         ),
