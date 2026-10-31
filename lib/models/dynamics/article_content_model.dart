@@ -86,11 +86,43 @@ class Line {
 class Format {
   Format({
     this.align,
+    this.listFormat,
   });
   int? align;
+  ListFormat? listFormat;
 
   Format.fromJson(Map<String, dynamic> json) {
     align = json['align'];
+    listFormat = json['list_format'] == null
+        ? null
+        : ListFormat.fromJson(json['list_format']);
+  }
+}
+
+/// 列表项格式
+///
+/// 新版专栏把无序/有序列表拆成「每个条目一个段落」：`para_type` 为 5 或 6，
+/// 且没有 `list` / `link_card` 字段，只有 `format.list_format`。
+class ListFormat {
+  ListFormat({
+    this.level,
+    this.order,
+    this.theme,
+  });
+
+  /// 缩进层级，从 1 开始
+  int? level;
+
+  /// 序号，从 1 开始
+  int? order;
+
+  /// 列表样式：`dot` 圆点 / `arabic_num` 阿拉伯数字
+  String? theme;
+
+  ListFormat.fromJson(Map<String, dynamic> json) {
+    level = json['level'];
+    order = json['order'];
+    theme = json['theme'];
   }
 }
 

@@ -196,6 +196,50 @@ class OpusContent extends StatelessWidget {
     );
   }
 
+  /// 渲染单个列表项段落
+  ///
+  /// `theme` 为 `arabic_num` 时用「序号. 」，`dot`（或缺失）用圆点，
+  /// 按 `level` 做缩进；正文仍走 [_node2Widget] 以保留加粗、表情、链接。
+  static Widget _listItemWidget({
+    required ArticleContentModel element,
+    required String opusId,
+    required ColorScheme colorScheme,
+    required ValueGetter<double> surfaceLuminance,
+  }) {
+    final listFormat = element.format!.listFormat!;
+    final level = listFormat.level ?? 1;
+    final spans = <InlineSpan>[];
+    switch (listFormat.theme) {
+      case 'arabic_num':
+        spans.add(TextSpan(text: '${listFormat.order ?? 0}. '));
+      case 'dot' || null:
+        spans.add(
+          const WidgetSpan(
+            child: Icon(MdiIcons.circleMedium),
+            alignment: .middle,
+          ),
+        );
+      default:
+        break;
+    }
+    if (element.text?.nodes case final nodes?) {
+      for (final item in nodes) {
+        spans.add(
+          _node2Widget(
+            item: item,
+            opusId: opusId,
+            colorScheme: colorScheme,
+            surfaceLuminance: surfaceLuminance,
+          ),
+        );
+      }
+    }
+    return Padding(
+      padding: EdgeInsets.only(left: (level - 1).clamp(0, 8) * 16.0),
+      child: Text.rich(TextSpan(children: spans)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // if (kDebugMode) debugPrint('opusContent');
@@ -355,7 +399,7 @@ class OpusContent extends StatelessWidget {
                                 .toList(),
                           );
                         }),
-                        if (i < element.list!.items!.length - 1)
+                        if (i < element.list!.children!.length - 1)
                           const TextSpan(text: '\n'),
                       ],
                     );
@@ -406,7 +450,17 @@ class OpusContent extends StatelessWidget {
                   }).toList(),
                 ),
               );
-            case 6:
+            // 新版专栏的列表项：para_type 为 5/6，没有 list / link_card，
+            // 只有 format.list_format（level/order/theme）
+            case 5 when (element.format?.listFormat != null):
+            case 6 when (element.format?.listFormat != null):
+              return _listItemWidget(
+                element: element,
+                opusId: opusId,
+                colorScheme: colorScheme,
+                surfaceLuminance: getSurfaceLuminance,
+              );
+            case 6 when (element.linkCard?.card != null):
               final type = element.linkCard!.card!.type;
               Widget child;
               switch (type) {
