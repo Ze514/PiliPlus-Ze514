@@ -145,6 +145,11 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     }
   }
 
+  /// 屏蔽词过滤会把整页回复删空，不能拿它当作「没有更多了」。
+  /// 连续这么多页都空才放弃，避免屏蔽词过宽时无限翻页。
+  @override
+  int get emptyPageLimit => 10;
+
   late final _filterIntro = Pref.filterIntro;
   String? intro;
   @pragma('vm:prefer-inline')
