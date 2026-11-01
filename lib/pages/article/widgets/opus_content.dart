@@ -104,6 +104,28 @@ class OpusContent extends StatelessWidget {
                 ),
               ],
             );
+          case 'RICH_TEXT_NODE_TYPE_VOTE':
+            final rid = rich.rid != null ? int.tryParse(rich.rid!) : null;
+            return TextSpan(
+              children: [
+                WidgetSpan(
+                  alignment: .middle,
+                  child: Icon(
+                    Icons.bar_chart_rounded,
+                    size: 16,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                TextSpan(
+                  text: ' ${rich.origText} ',
+                  style: TextStyle(color: colorScheme.primary),
+                  recognizer: rid != null
+                      ? (NoDeadlineTapGestureRecognizer()
+                          ..onTap = () => showVoteDialog(Get.context!, rid))
+                      : null,
+                ),
+              ],
+            );
           default:
             return TextSpan(
               text:
@@ -160,7 +182,7 @@ class OpusContent extends StatelessWidget {
             : null,
         decorationColor: color,
         fontStyle: style?.italic == true ? FontStyle.italic : null,
-        fontWeight: style?.bold == true ? FontWeight.bold : null,
+        fontWeight: style?.bold == true ? .bold : null,
         color: color,
         fontSize: fontSize,
       );
@@ -368,7 +390,7 @@ class OpusContent extends StatelessWidget {
       return const SliverToBoxAdapter();
     }
 
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme = ColorScheme.of(context);
     late final isDarkMode = colorScheme.isDark;
     double? surfaceLuminance;
     double getSurfaceLuminance() =>
@@ -636,11 +658,53 @@ class OpusContent extends StatelessWidget {
                   );
                 case 'LINK_CARD_TYPE_LIVE' when (card.live != null):
                   final live = card.live!;
-                  child = _coverCard(
-                    cover: live.cover,
-                    title: live.title,
-                    descs: [live.descFirst, live.descSecond],
-                    colorScheme: colorScheme,
+                  final liveState = live.liveState == 1;
+                  child = Row(
+                    spacing: 10,
+                    children: [
+                      // 直播状态角标来自上游 improve opus
+                      Stack(
+                        clipBehavior: .none,
+                        children: [
+                          NetworkImgLayer(
+                            width: 104,
+                            height: 65,
+                            src: live.cover,
+                            borderRadius: const .all(.circular(6)),
+                          ),
+                          PBadge(
+                            top: 6,
+                            right: 6,
+                            text: liveState ? '直播中' : '直播结束',
+                            type: liveState ? .primary : .gray,
+                          ),
+                        ],
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: .start,
+                          children: [
+                            if (live.title?.isNotEmpty == true)
+                              Text(
+                                live.title!,
+                                maxLines: 2,
+                                overflow: .ellipsis,
+                              ),
+                            for (final desc in [live.descFirst, live.descSecond])
+                              if (desc?.isNotEmpty == true)
+                                Text(
+                                  desc!,
+                                  maxLines: 1,
+                                  overflow: .ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colorScheme.outline,
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
+                    ],
                   );
                 case 'LINK_CARD_TYPE_OPUS' when (card.opus != null):
                   final opus = card.opus!;
@@ -861,6 +925,154 @@ class OpusContent extends StatelessWidget {
                       ],
                     ),
                   );
+                // 以下四种卡片由上游 improve opus 引入
+                case "LINK_CARD_TYPE_EVA3_USER"
+                    when (card.eva3User?.info?.user != null):
+                  final info = card.eva3User!.info!;
+                  final user = info.user!;
+                  child = Row(
+                    spacing: 10,
+                    children: [
+                      NetworkImgLayer(
+                        width: 48,
+                        height: 48,
+                        type: .avatar,
+                        src: user.face,
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: .start,
+                          children: [
+                            if (user.name?.isNotEmpty == true)
+                              Text(
+                                user.name!,
+                                maxLines: 1,
+                                overflow: .ellipsis,
+                              ),
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(text: info.follower),
+                                  const TextSpan(text: '   '),
+                                  TextSpan(text: info.like),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: .ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colorScheme.outline,
+                              ),
+                            ),
+                            if (info.desc?.isNotEmpty == true)
+                              Text(
+                                info.desc!,
+                                maxLines: 1,
+                                overflow: .ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colorScheme.outline,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                case "LINK_CARD_TYPE_EVA3_TOY" when (card.eva3Toy?.info != null):
+                  final info = card.eva3Toy!.info!;
+                  child = SizedBox(
+                    height: 65,
+                    child: Row(
+                      spacing: 10,
+                      children: [
+                        NetworkImgLayer(
+                          width: 65,
+                          height: 65,
+                          src: info.poster,
+                          borderRadius: const .all(.circular(6)),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: .start,
+                            mainAxisAlignment: .spaceBetween,
+                            children: [
+                              if (info.title?.isNotEmpty == true)
+                                Text(
+                                  info.title!,
+                                  maxLines: 2,
+                                  overflow: .ellipsis,
+                                ),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(text: info.up?.name),
+                                    const TextSpan(text: '   '),
+                                    TextSpan(text: info.statText),
+                                  ],
+                                ),
+                                maxLines: 1,
+                                overflow: .ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                case "LINK_CARD_TYPE_EVA3_VOTE"
+                    when (card.eva3Vote?.info != null):
+                  final info = card.eva3Vote!.info!;
+                  child = Row(
+                    spacing: 10,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: const .all(.circular(8)),
+                        ),
+                        width: 60,
+                        height: 42,
+                        child: Icon(
+                          Icons.bar_chart_rounded,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: .start,
+                          children: [
+                            if (info.title?.isNotEmpty == true)
+                              Text(
+                                info.title!,
+                                maxLines: 1,
+                                overflow: .ellipsis,
+                              ),
+                            Text(
+                              '${info.joinNum ?? 0}人参与',
+                              maxLines: 1,
+                              overflow: .ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                case "LINK_CARD_TYPE_EVA3_COMMENT"
+                    when (card.eva3Comment?.info != null):
+                  final comment = card.eva3Comment!.info!;
+                  child = Text(
+                    '${comment.linkShowText ?? ''}:\n'
+                    '${comment.source?.desc ?? ''}',
+                  );
                 // 已知类型但 payload 缺失，或属于 archive/match/reserve 等
                 // 尚未实现的类型：退回通用链接卡，不再抛异常
                 default:
@@ -921,6 +1133,22 @@ class OpusContent extends StatelessWidget {
                               );
                               return;
                             }
+                            if (type == 'LINK_CARD_TYPE_EVA3_USER') {
+                              final mid = card.eva3User?.info?.user?.mid;
+                              if (mid != null && mid.isNotEmpty) {
+                                Get.toNamed('/member?mid=$mid');
+                              }
+                              return;
+                            }
+                            if (type == 'LINK_CARD_TYPE_EVA3_VOTE') {
+                              final voteId = int.tryParse(
+                                card.eva3Vote?.info?.voteId ?? '',
+                              );
+                              if (voteId != null) {
+                                showVoteDialog(context, voteId);
+                              }
+                              return;
+                            }
                             final url = switch (type) {
                               'LINK_CARD_TYPE_UGC' => card.ugc?.jumpUrl,
                               'LINK_CARD_TYPE_COMMON' => card.common?.jumpUrl,
@@ -931,6 +1159,10 @@ class OpusContent extends StatelessWidget {
                                 card.eva3Video?.info?.jumpUrl,
                               'LINK_CARD_TYPE_EVA3_OPUS' =>
                                 card.eva3Opus?.info?.jumpUrl,
+                              'LINK_CARD_TYPE_EVA3_TOY' =>
+                                card.eva3Toy?.info?.jumpUri,
+                              'LINK_CARD_TYPE_EVA3_COMMENT' =>
+                                card.eva3Comment?.resourceUrl,
                               _ => card.link,
                             };
                             if (url != null && url.isNotEmpty) {
@@ -1059,15 +1291,22 @@ class OpusContent extends StatelessWidget {
 
 Widget moduleBlockedItem(
   BuildContext context,
-  ThemeData theme,
+  ColorScheme colorScheme,
   ModuleBlocked moduleBlocked,
 ) {
-  late final isDarkMode = theme.isDark;
+  late final isDarkMode = colorScheme.isDark;
 
   BoxDecoration? bgImg(double width) {
     return moduleBlocked.bgImg == null
         ? null
         : BoxDecoration(
+            borderRadius: const .all(.circular(6)),
+            border: .all(
+              width: 0.8,
+              color: isDarkMode
+                  ? colorScheme.surfaceContainerHighest
+                  : colorScheme.surfaceContainerHigh,
+            ),
             image: DecorationImage(
               fit: .fill,
               image: ResizeImage(
@@ -1087,9 +1326,9 @@ Widget moduleBlockedItem(
   Widget icon(double width) {
     return CachedNetworkImage(
       width: width,
-      gaplessPlayback: true,
       memCacheWidth: width.cacheSize(context),
-      fit: BoxFit.contain,
+      fit: .contain,
+      gaplessPlayback: true,
       imageUrl: ImageUtils.thumbnailUrl(
         isDarkMode ? moduleBlocked.icon!.imgDark : moduleBlocked.icon!.imgDay,
       ),
@@ -1105,12 +1344,12 @@ Widget moduleBlockedItem(
   }) {
     return FilledButton.tonal(
       style: FilledButton.styleFrom(
-        padding: padding,
         tapTargetSize: .shrinkWrap,
         visualDensity: visualDensity,
-        backgroundColor: theme.colorScheme.btnColor,
-        foregroundColor: Colors.white,
         shape: shape,
+        padding: padding,
+        foregroundColor: Colors.white,
+        backgroundColor: colorScheme.btnColor,
       ),
       onPressed: () {
         if (moduleBlocked.button!.jumpUrl?.isNotEmpty == true) {
@@ -1124,6 +1363,7 @@ Widget moduleBlockedItem(
             CachedNetworkImage(
               height: 16,
               color: Colors.white,
+              gaplessPlayback: true,
               memCacheHeight: 16.cacheSize(context),
               placeholder: (_, _) => const SizedBox.shrink(),
               imageUrl: ImageUtils.safeThumbnailUrl(moduleBlocked.button!.icon),
@@ -1155,8 +1395,8 @@ Widget moduleBlockedItem(
                   const SizedBox(height: 5),
                   Text(
                     moduleBlocked.hintMessage!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: theme.colorScheme.outline),
+                    textAlign: .center,
+                    style: TextStyle(color: colorScheme.outline),
                   ),
                 ],
                 if (moduleBlocked.button != null) ...[
@@ -1195,7 +1435,7 @@ Widget moduleBlockedItem(
                       moduleBlocked.hintMessage!,
                       style: TextStyle(
                         fontSize: 13,
-                        color: theme.colorScheme.outline,
+                        color: colorScheme.outline,
                       ),
                     ),
                 ],
@@ -1220,20 +1460,20 @@ Widget moduleBlockedItem(
   );
 }
 
-Widget opusCollection(ThemeData theme, ModuleCollection item) {
+Widget opusCollection(ColorScheme colorScheme, ModuleCollection item) {
   return Padding(
-    padding: const EdgeInsets.only(bottom: 10),
+    padding: const .only(bottom: 10),
     child: Material(
-      borderRadius: const BorderRadius.all(Radius.circular(8)),
-      color: theme.colorScheme.onInverseSurface,
+      borderRadius: const .all(.circular(8)),
+      color: colorScheme.onInverseSurface,
       child: InkWell(
-        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        borderRadius: const .all(.circular(8)),
         onTap: () => Get.toNamed(
           '/articleList',
           parameters: {'id': '${item.id}'},
         ),
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const .all(10),
           child: Row(
             children: [
               Expanded(
@@ -1250,14 +1490,14 @@ Widget opusCollection(ThemeData theme, ModuleCollection item) {
                             child: Icon(
                               size: 18,
                               Icons.article_outlined,
-                              color: theme.colorScheme.outline,
+                              color: colorScheme.outline,
                             ),
                           ),
                           TextSpan(
                             text: '${item.name} · ${item.count}',
                             style: TextStyle(
                               fontSize: 13,
-                              color: theme.colorScheme.outline,
+                              color: colorScheme.outline,
                             ),
                           ),
                         ],
@@ -1268,7 +1508,7 @@ Widget opusCollection(ThemeData theme, ModuleCollection item) {
               ),
               Icon(
                 Icons.keyboard_arrow_right,
-                color: theme.colorScheme.outline,
+                color: colorScheme.outline,
               ),
             ],
           ),
