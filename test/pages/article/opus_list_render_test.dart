@@ -208,4 +208,71 @@ void main() {
       expect(_listItem(theme: 'dot', order: 1).format?.headingType, isNull);
     });
   });
+
+  // article/view 与 opus/detail 的 para_type 编号不同，渲染必须按字段判
+  group('按字段分派（两接口编号不同）', () {
+    testWidgets('para_type=8 + code 渲染成代码块', (tester) async {
+      final code = ArticleContentModel.fromJson({
+        'para_type': 8,
+        'code': {'content': 'print(1)\n', 'lang': 'language-python'},
+      });
+
+      await tester.pumpWidget(_app([code]));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('不支持的类型', findRichText: true),
+        findsNothing,
+      );
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+    });
+
+    testWidgets('para_type=7 + link_card 渲染成卡片', (tester) async {
+      final card = ArticleContentModel.fromJson({
+        'para_type': 7,
+        'link_card': {
+          'card': {
+            'type': 'LINK_CARD_TYPE_ITEM_NULL',
+            'oid': '123',
+            'item_null': {'text': '专栏'},
+          },
+        },
+      });
+
+      await tester.pumpWidget(_app([card]));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('专栏'), findsOneWidget);
+      expect(
+        find.textContaining('不支持的类型', findRichText: true),
+        findsNothing,
+      );
+    });
+  });
+
+  group('列表 theme 样式', () {
+    testWidgets('square 用方形标记', (tester) async {
+      await tester.pumpWidget(_app([_listItem(theme: 'square', order: 1)]));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(MdiIcons.squareMedium), findsOneWidget);
+    });
+
+    testWidgets('circle 用空心圆标记', (tester) async {
+      await tester.pumpWidget(_app([_listItem(theme: 'circle', order: 1)]));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(MdiIcons.circleOutline), findsOneWidget);
+    });
+
+    testWidgets('roman_num 用罗马数字', (tester) async {
+      await tester.pumpWidget(_app([_listItem(theme: 'roman_num', order: 4)]));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('iv. ', findRichText: true), findsOneWidget);
+    });
+
+    testWidgets('theme 缺省时退回圆点', (tester) async {
+      await tester.pumpWidget(_app([_listItem(theme: '', order: 1)]));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(MdiIcons.circleMedium), findsOneWidget);
+    });
+  });
 }

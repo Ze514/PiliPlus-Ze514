@@ -385,7 +385,8 @@ abstract final class DynamicsHttp {
     if (res.data['code'] == 0) {
       return Success(DynamicItemModel.fromOpusJson(res.data['data']));
     } else {
-      return Error(res.data['message']);
+      // 带上 code：4101105/4101152 由调用方决定是否改用 article/view
+      return Error(res.data['message'], code: res.data['code']);
     }
   }
 

@@ -209,18 +209,33 @@ class OpusContent extends StatelessWidget {
     final listFormat = element.format!.listFormat!;
     final level = listFormat.level ?? 1;
     final spans = <InlineSpan>[];
+    // theme 缺省按 dot 处理；square/circle 是嵌套层级的循环样式
     switch (listFormat.theme) {
       case 'arabic_num':
         spans.add(TextSpan(text: '${listFormat.order ?? 0}. '));
-      case 'dot' || null:
+      case 'roman_num':
+        spans.add(TextSpan(text: '${_toRoman(listFormat.order ?? 0)}. '));
+      case 'square':
+        spans.add(
+          const WidgetSpan(
+            child: Icon(MdiIcons.squareMedium, size: 10),
+            alignment: .middle,
+          ),
+        );
+      case 'circle':
+        spans.add(
+          const WidgetSpan(
+            child: Icon(MdiIcons.circleOutline, size: 12),
+            alignment: .middle,
+          ),
+        );
+      default:
         spans.add(
           const WidgetSpan(
             child: Icon(MdiIcons.circleMedium),
             alignment: .middle,
           ),
         );
-      default:
-        break;
     }
     if (element.text?.nodes case final nodes?) {
       for (final item in nodes) {
@@ -238,6 +253,23 @@ class OpusContent extends StatelessWidget {
       padding: EdgeInsets.only(left: (level - 1).clamp(0, 8) * 16.0),
       child: Text.rich(TextSpan(children: spans)),
     );
+  }
+
+  /// 1 → i、4 → iv（roman_num 列表用）
+  static String _toRoman(int n) {
+    if (n <= 0) return '';
+    const values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+    const symbols = [
+      'm', 'cm', 'd', 'cd', 'c', 'xc', 'l', 'xl', 'x', 'ix', 'v', 'iv', 'i', //
+    ];
+    final sb = StringBuffer();
+    for (var i = 0; i < values.length; i++) {
+      while (n >= values[i]) {
+        sb.write(symbols[i]);
+        n -= values[i];
+      }
+    }
+    return sb.toString();
   }
 
   @override
@@ -450,17 +482,17 @@ class OpusContent extends StatelessWidget {
                   }).toList(),
                 ),
               );
-            // 新版专栏的列表项：para_type 为 5/6，没有 list / link_card，
-            // 只有 format.list_format（level/order/theme）
-            case 5 when (element.format?.listFormat != null):
-            case 6 when (element.format?.listFormat != null):
+            // 两个接口的 para_type 编号不同（od: 6 卡片/7 代码/8 标题；
+            // av: 7 卡片/8 代码/9 标题），所以下面一律按字段判，不按编号。
+            case _ when (element.format?.listFormat != null):
               return _listItemWidget(
                 element: element,
                 opusId: opusId,
                 colorScheme: colorScheme,
                 surfaceLuminance: getSurfaceLuminance,
               );
-            case 6 when (element.linkCard?.card != null):
+            // 链接卡片：od 6 / av 7
+            case _ when (element.linkCard?.card != null):
               final type = element.linkCard!.card!.type;
               Widget child;
               switch (type) {
@@ -908,7 +940,8 @@ class OpusContent extends StatelessWidget {
                   ),
                 ),
               );
-            case 7 when (element.code != null):
+            // 代码块：od 7 / av 8
+            case _ when (element.code != null):
               final renderer = TextSpanRenderer(
                 null,
                 isDarkMode ? githubDarkTheme : githubTheme,
@@ -934,7 +967,8 @@ class OpusContent extends StatelessWidget {
                 width: .infinity,
                 child: Text.rich(renderer.span!),
               );
-            case 8 when (element.heading?.nodes?.isNotEmpty == true):
+            // 文章标题：仅 od 8，两端均无实测样本，保持候选实现
+            case _ when (element.heading?.nodes?.isNotEmpty == true):
               return Text.rich(
                 TextSpan(
                   children: element.heading!.nodes!
@@ -949,9 +983,10 @@ class OpusContent extends StatelessWidget {
                       .toList(),
                 ),
               );
-            // 新版专栏的分级标题：para_type=9 + format.heading_type(1/2)，
-            // 正文在 text.nodes（字号 24/22 已由 word 自带），这里补标题语义
-            case 9 when (element.text?.nodes?.isNotEmpty == true):
+            // 分级标题：av 9，正文在 text，级别看 heading_type
+            case _
+                when (element.format?.headingType != null &&
+                    element.text?.nodes?.isNotEmpty == true):
               final headingLevel = element.format?.headingType ?? 1;
               return Padding(
                 padding: EdgeInsets.only(

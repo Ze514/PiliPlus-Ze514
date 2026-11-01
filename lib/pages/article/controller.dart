@@ -30,6 +30,9 @@ class ArticleController extends CommonDynController
 
   late String url;
   late int commentId;
+
+  /// 从 cv 链接进来时记下 cvid：opus/detail 打不开时可退回 article/view
+  int? _cvid;
   @override
   int get oid => commentId;
   late int commentType;
@@ -67,6 +70,7 @@ class ArticleController extends CommonDynController
 
     // to opus
     if (type == 'read') {
+      _cvid = int.tryParse(id);
       UrlUtils.parseRedirectUrl('https://www.bilibili.com/read/cv$id/').then((
         url,
       ) {
@@ -119,6 +123,15 @@ class ArticleController extends CommonDynController
         ..title ??= response.modules.moduleTag?.text;
       return true;
     } else {
+      // 老专栏没有动态，opus/detail 会返回 4101105 / 4101152；
+      // 只有从 cv 链接进来（记了 cvid）才能退回 article/view
+      if (res case Error(:final code)
+          when _cvid != null && (code == 4101105 || code == 4101152)) {
+        id = '$_cvid';
+        type = 'read';
+        init();
+        return false;
+      }
       loadingState.value = res as Error;
       return false;
     }
