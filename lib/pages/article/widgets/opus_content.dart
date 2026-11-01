@@ -949,6 +949,33 @@ class OpusContent extends StatelessWidget {
                       .toList(),
                 ),
               );
+            // 新版专栏的分级标题：para_type=9 + format.heading_type(1/2)，
+            // 正文在 text.nodes（字号 24/22 已由 word 自带），这里补标题语义
+            case 9 when (element.text?.nodes?.isNotEmpty == true):
+              final headingLevel = element.format?.headingType ?? 1;
+              return Padding(
+                padding: EdgeInsets.only(
+                  top: headingLevel <= 1 ? 12 : 8,
+                  bottom: 4,
+                ),
+                child: Semantics(
+                  header: true,
+                  child: Text.rich(
+                    TextSpan(
+                      children: element.text!.nodes!
+                          .map(
+                            (e) => _node2Widget(
+                              item: e,
+                              opusId: opusId,
+                              colorScheme: colorScheme,
+                              surfaceLuminance: getSurfaceLuminance,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+              );
             default:
               if (kDebugMode) debugPrint('unknown type ${element.paraType}');
               if (element.text?.nodes?.isNotEmpty == true) {

@@ -87,15 +87,20 @@ class Format {
   Format({
     this.align,
     this.listFormat,
+    this.headingType,
   });
   int? align;
   ListFormat? listFormat;
+
+  /// 标题级别（`para_type=9` 用），1 最大
+  int? headingType;
 
   Format.fromJson(Map<String, dynamic> json) {
     align = json['align'];
     listFormat = json['list_format'] == null
         ? null
         : ListFormat.fromJson(json['list_format']);
+    headingType = json['heading_type'];
   }
 }
 

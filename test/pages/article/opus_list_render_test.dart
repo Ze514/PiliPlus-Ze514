@@ -129,4 +129,83 @@ void main() {
       );
     });
   });
+
+  group('专栏标题渲染', () {
+    testWidgets('para_type=9 带标题语义且不报错', (tester) async {
+      final heading = ArticleContentModel.fromJson({
+        'para_type': 9,
+        'format': {
+          'indent': {},
+          'heading_type': 1,
+        },
+        'text': {
+          'nodes': [
+            {
+              'node_type': 1,
+              'word': {
+                'words': '1. Super-agent',
+                'font_size': 24,
+                'font_level': 'xxLarge',
+              },
+            },
+          ],
+        },
+      });
+
+      await tester.pumpWidget(_app([heading]));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('错误的类型', findRichText: true),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('不支持的类型', findRichText: true),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('1. Super-agent', findRichText: true),
+        findsOneWidget,
+      );
+      // 标题语义：读屏能识别为 heading
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.header == true,
+        ),
+        findsOneWidget,
+      );
+    });
+
+    test('heading_type 能解析出来', () {
+      final h1 = ArticleContentModel.fromJson({
+        'para_type': 9,
+        'format': {'heading_type': 1},
+        'text': {
+          'nodes': [
+            {
+              'node_type': 1,
+              'word': {'words': 'A'},
+            },
+          ],
+        },
+      });
+      final h2 = ArticleContentModel.fromJson({
+        'para_type': 9,
+        'format': {'heading_type': 2},
+        'text': {
+          'nodes': [
+            {
+              'node_type': 1,
+              'word': {'words': 'B'},
+            },
+          ],
+        },
+      });
+
+      expect(h1.format?.headingType, 1);
+      expect(h2.format?.headingType, 2);
+      // 普通段落不应带 headingType
+      expect(_listItem(theme: 'dot', order: 1).format?.headingType, isNull);
+    });
+  });
 }
