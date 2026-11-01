@@ -260,6 +260,11 @@ class Ugc {
 class Card {
   String? oid;
   String? type;
+
+  /// 以下三项只在 article/view 出现：卡片没有 type，改由 link_type 区分
+  int? linkType;
+  String? showText;
+  String? link;
   Ugc? ugc;
   ItemNull? itemNull;
   Common? common;
@@ -275,6 +280,9 @@ class Card {
   Card.fromJson(Map<String, dynamic> json) {
     oid = json['oid'];
     type = json['type'];
+    linkType = json['link_type'];
+    showText = json['show_text'];
+    link = json['link'];
     ugc = json['ugc'] == null ? null : Ugc.fromJson(json['ugc']);
     itemNull = json['item_null'] == null
         ? null

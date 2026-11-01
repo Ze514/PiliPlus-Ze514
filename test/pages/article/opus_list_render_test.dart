@@ -248,6 +248,32 @@ void main() {
         findsNothing,
       );
     });
+
+    // article/view 的卡片没有 type，只有 link_type/show_text/link
+    testWidgets('article/view 形态的卡片渲染成链接行', (tester) async {
+      final card = ArticleContentModel.fromJson({
+        'para_type': 7,
+        'link_card': {
+          'card': {
+            'show_text': '【嵌入式】PlatformIO 串口调试的使用',
+            'link': 'https://www.bilibili.com/video/BV19r4y1W7GJ',
+            'link_type': 41,
+            'biz_id': '767711560',
+          },
+        },
+      });
+
+      await tester.pumpWidget(_app([card]));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('PlatformIO'), findsOneWidget);
+      expect(find.textContaining('BV19r4y1W7GJ'), findsOneWidget);
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+      expect(
+        find.textContaining('不支持的类型', findRichText: true),
+        findsNothing,
+      );
+    });
   });
 
   group('列表 theme 样式', () {

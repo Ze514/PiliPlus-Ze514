@@ -491,6 +491,68 @@ class OpusContent extends StatelessWidget {
                 colorScheme: colorScheme,
                 surfaceLuminance: getSurfaceLuminance,
               );
+            // article/view 的卡片没有 type，只有 link_type/show_text/link，
+            // 与 opus/detail 的卡片是两种结构，单独处理
+            case _
+                when (element.linkCard?.card != null &&
+                    element.linkCard!.card!.type == null):
+              final card = element.linkCard!.card!;
+              return Material(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: .all(.circular(8)),
+                ),
+                color: colorScheme.onInverseSurface,
+                child: InkWell(
+                  borderRadius: const .all(.circular(8)),
+                  onTap: card.link == null || card.link!.isEmpty
+                      ? null
+                      : () => PiliScheme.routePushFromUrl(card.link!),
+                  child: Padding(
+                    padding: const .all(8),
+                    child: Row(
+                      spacing: 10,
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 50,
+                          alignment: .center,
+                          decoration: BoxDecoration(
+                            borderRadius: const .all(.circular(6)),
+                            color: colorScheme.secondaryContainer,
+                          ),
+                          child: Icon(
+                            MdiIcons.linkVariant,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: .start,
+                            mainAxisAlignment: .center,
+                            children: [
+                              Text(
+                                card.showText ?? card.link ?? '链接',
+                                maxLines: 2,
+                                overflow: .ellipsis,
+                              ),
+                              if (card.link != null && card.link!.isNotEmpty)
+                                Text(
+                                  card.link!,
+                                  maxLines: 1,
+                                  overflow: .ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colorScheme.outline,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
             // 链接卡片：od 6 / av 7
             case _ when (element.linkCard?.card != null):
               final type = element.linkCard!.card!.type;
