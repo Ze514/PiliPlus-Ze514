@@ -301,4 +301,102 @@ void main() {
       expect(find.byIcon(MdiIcons.circleMedium), findsOneWidget);
     });
   });
+
+  // 卡片字段缺失时不能让整段变红字：宁可少显示一行，也不能报错
+  group('链接卡片的空值兜底', () {
+    ArticleContentModel cardPara(Map<String, dynamic> card) =>
+        ArticleContentModel.fromJson({
+          'para_type': 6,
+          'link_card': {'card': card},
+        });
+
+    /// 测试环境没有资源包，占位图会异步报错，这里只关心有没有出现红字
+    Future<void> settle(WidgetTester tester, Widget app) async {
+      await tester.pumpWidget(app);
+      await tester.pumpAndSettle();
+      tester.takeException();
+    }
+
+    testWidgets('UGC 卡片缺少 desc_second 时只渲染标题', (tester) async {
+      await settle(
+        tester,
+        _app([
+          cardPara({
+            'type': 'LINK_CARD_TYPE_UGC',
+            'ugc': {'title': '某个视频'},
+          }),
+        ]),
+      );
+
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+      expect(find.textContaining('某个视频'), findsOneWidget);
+    });
+
+    testWidgets('type 是 UGC 但 ugc 缺失时退回通用链接卡', (tester) async {
+      await settle(
+        tester,
+        _app([
+          cardPara({
+            'type': 'LINK_CARD_TYPE_UGC',
+            'show_text': '兜底标题',
+            'link': 'https://www.bilibili.com/read/cv1',
+          }),
+        ]),
+      );
+
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+      expect(find.textContaining('兜底标题'), findsOneWidget);
+    });
+
+    testWidgets('未实现的卡片类型不再抛异常', (tester) async {
+      await settle(
+        tester,
+        _app([
+          cardPara({'type': 'LINK_CARD_TYPE_ARCHIVE', 'oid': '1'}),
+        ]),
+      );
+
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+      // 兜底卡片至少给出一个可读占位
+      expect(find.textContaining('链接'), findsOneWidget);
+    });
+
+    testWidgets('投票卡片缺少 desc 时只渲染参与人数', (tester) async {
+      await settle(
+        tester,
+        _app([
+          cardPara({
+            'type': 'LINK_CARD_TYPE_VOTE',
+            'vote': {'vote_id': 1, 'join_num': 7},
+          }),
+        ]),
+      );
+
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+      expect(find.textContaining('7人参与'), findsOneWidget);
+    });
+
+    testWidgets('列表项缺少 nodes 时不留红字', (tester) async {
+      final list = ArticleContentModel.fromJson({
+        'para_type': 5,
+        'list': {
+          'items': [
+            {'level': 1, 'order': 1},
+            {
+              'level': 1,
+              'order': 2,
+              'nodes': [
+                {'node_type': 1, 'word': {'words': '第二项', 'font_size': 17}},
+              ],
+            },
+          ],
+        },
+      });
+
+      await settle(tester, _app([list]));
+
+      expect(find.textContaining('错误的类型', findRichText: true), findsNothing);
+      expect(find.textContaining('第二项', findRichText: true), findsOneWidget);
+    });
+  });
 }

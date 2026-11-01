@@ -272,6 +272,95 @@ class OpusContent extends StatelessWidget {
     return sb.toString();
   }
 
+  /// 卡片的「封面 + 文字」布局
+  ///
+  /// 标题或描述为空时自动省略，不再用 `!` 断言——缺字段只会少一行字，
+  /// 不会让整段变成红字。
+  static Widget _coverCard({
+    String? cover,
+    String? title,
+    required List<String?> descs,
+    required ColorScheme colorScheme,
+  }) {
+    return Row(
+      spacing: 10,
+      children: [
+        NetworkImgLayer(
+          width: 104,
+          height: 65,
+          src: cover,
+          borderRadius: const .all(.circular(6)),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: .start,
+            children: [
+              if (title?.isNotEmpty == true)
+                Text(title!, maxLines: 2, overflow: .ellipsis),
+              for (final desc in descs)
+                if (desc?.isNotEmpty == true)
+                  Text(
+                    desc!,
+                    maxLines: 2,
+                    overflow: .ellipsis,
+                    style: TextStyle(fontSize: 13, color: colorScheme.outline),
+                  ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 通用链接卡片：图标 + 标题 + 链接
+  ///
+  /// 三处共用：article/view 的卡片没有 `type`；已知类型但 payload 缺失；
+  /// 以及 archive/match/reserve 等尚未实现的类型。
+  static Widget _genericLinkCard({
+    String? showText,
+    String? link,
+    required ColorScheme colorScheme,
+  }) {
+    return Row(
+      spacing: 10,
+      children: [
+        Container(
+          width: 70,
+          height: 50,
+          alignment: .center,
+          decoration: BoxDecoration(
+            borderRadius: const .all(.circular(6)),
+            color: colorScheme.secondaryContainer,
+          ),
+          child: Icon(
+            MdiIcons.linkVariant,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: .start,
+            mainAxisAlignment: .center,
+            children: [
+              Text(
+                showText ?? link ?? '链接',
+                maxLines: 2,
+                overflow: .ellipsis,
+              ),
+              if (link != null && link.isNotEmpty)
+                Text(
+                  link,
+                  maxLines: 1,
+                  overflow: .ellipsis,
+                  style: TextStyle(fontSize: 13, color: colorScheme.outline),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // if (kDebugMode) debugPrint('opusContent');
@@ -448,7 +537,8 @@ class OpusContent extends StatelessWidget {
                           child: Icon(MdiIcons.circleMedium),
                           alignment: .middle,
                         ),
-                        ...entry.nodes!.map((item) {
+                        // nodes 可能缺失（空列表项），缺了就只留一个标记
+                        ...?entry.nodes?.map((item) {
                           if (item.word != null) {
                             return _getSpan(
                               item.word,
@@ -509,198 +599,62 @@ class OpusContent extends StatelessWidget {
                       : () => PiliScheme.routePushFromUrl(card.link!),
                   child: Padding(
                     padding: const .all(8),
-                    child: Row(
-                      spacing: 10,
-                      children: [
-                        Container(
-                          width: 70,
-                          height: 50,
-                          alignment: .center,
-                          decoration: BoxDecoration(
-                            borderRadius: const .all(.circular(6)),
-                            color: colorScheme.secondaryContainer,
-                          ),
-                          child: Icon(
-                            MdiIcons.linkVariant,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: .start,
-                            mainAxisAlignment: .center,
-                            children: [
-                              Text(
-                                card.showText ?? card.link ?? '链接',
-                                maxLines: 2,
-                                overflow: .ellipsis,
-                              ),
-                              if (card.link != null && card.link!.isNotEmpty)
-                                Text(
-                                  card.link!,
-                                  maxLines: 1,
-                                  overflow: .ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: colorScheme.outline,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    child: _genericLinkCard(
+                      showText: card.showText,
+                      link: card.link,
+                      colorScheme: colorScheme,
                     ),
                   ),
                 ),
               );
             // 链接卡片：od 6 / av 7
             case _ when (element.linkCard?.card != null):
-              final type = element.linkCard!.card!.type;
+              final card = element.linkCard!.card!;
+              final type = card.type;
               Widget child;
+              // 每种类型都要求自己的 payload 存在，缺失时落到 default 兜底，
+              // 不再用 ! 断言（服务端偶尔会 type 与实际字段不一致）
               switch (type) {
-                case 'LINK_CARD_TYPE_UGC':
-                  final ugc = element.linkCard!.card!.ugc!;
-                  child = Row(
-                    spacing: 10,
-                    children: [
-                      NetworkImgLayer(
-                        width: 104,
-                        height: 65,
-                        src: ugc.cover,
-                        borderRadius: const .all(.circular(6)),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: .start,
-                          children: [
-                            Text(ugc.title!),
-                            Text(
-                              ugc.descSecond!,
-                              maxLines: 2,
-                              overflow: .ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colorScheme.outline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                case 'LINK_CARD_TYPE_UGC' when (card.ugc != null):
+                  final ugc = card.ugc!;
+                  child = _coverCard(
+                    cover: ugc.cover,
+                    title: ugc.title,
+                    descs: [ugc.descSecond],
+                    colorScheme: colorScheme,
                   );
                 case 'LINK_CARD_TYPE_ITEM_NULL':
-                  final itemNull = element.linkCard?.card?.itemNull;
-                  child = Text(
-                    ' ${itemNull?.text}: ${element.linkCard?.card?.oid}',
+                  final itemNull = card.itemNull;
+                  child = Text(' ${itemNull?.text}: ${card.oid}');
+                case 'LINK_CARD_TYPE_COMMON' when (card.common != null):
+                  final common = card.common!;
+                  child = _coverCard(
+                    cover: common.cover,
+                    title: common.title,
+                    descs: [common.desc1, common.desc2],
+                    colorScheme: colorScheme,
                   );
-                case 'LINK_CARD_TYPE_COMMON':
-                  final common = element.linkCard!.card!.common!;
-                  child = Row(
-                    spacing: 10,
-                    children: [
-                      NetworkImgLayer(
-                        width: 104,
-                        height: 65,
-                        src: common.cover,
-                        borderRadius: const .all(.circular(6)),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: .start,
-                          children: [
-                            Text(common.title!),
-                            if (common.desc1 != null)
-                              Text(
-                                common.desc1!,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colorScheme.outline,
-                                ),
-                              ),
-                            if (common.desc2 != null)
-                              Text(
-                                common.desc2!,
-                                maxLines: 2,
-                                overflow: .ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colorScheme.outline,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
+                case 'LINK_CARD_TYPE_LIVE' when (card.live != null):
+                  final live = card.live!;
+                  child = _coverCard(
+                    cover: live.cover,
+                    title: live.title,
+                    descs: [live.descFirst, live.descSecond],
+                    colorScheme: colorScheme,
+                  );
+                case 'LINK_CARD_TYPE_OPUS' when (card.opus != null):
+                  final opus = card.opus!;
+                  child = _coverCard(
+                    cover: opus.cover,
+                    title: opus.title,
+                    descs: [
+                      if (opus.authorName != null)
+                        '${opus.authorName} · ${opus.statView ?? 0}阅读',
                     ],
+                    colorScheme: colorScheme,
                   );
-                case 'LINK_CARD_TYPE_LIVE':
-                  final live = element.linkCard!.card!.live!;
-                  child = Row(
-                    spacing: 10,
-                    children: [
-                      NetworkImgLayer(
-                        width: 104,
-                        height: 65,
-                        src: live.cover,
-                        borderRadius: const .all(.circular(6)),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: .start,
-                          children: [
-                            Text(live.title!),
-                            if (live.descFirst != null)
-                              Text(
-                                live.descFirst!,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colorScheme.outline,
-                                ),
-                              ),
-                            if (live.descSecond != null)
-                              Text(
-                                live.descSecond!,
-                                maxLines: 2,
-                                overflow: .ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colorScheme.outline,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                case 'LINK_CARD_TYPE_OPUS':
-                  final opus = element.linkCard!.card!.opus!;
-                  child = Row(
-                    spacing: 10,
-                    children: [
-                      NetworkImgLayer(
-                        width: 104,
-                        height: 65,
-                        src: opus.cover,
-                        borderRadius: const .all(.circular(6)),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: .start,
-                          children: [
-                            Text(opus.title!),
-                            Text(
-                              '${opus.authorName} · ${opus.statView ?? 0}阅读',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colorScheme.outline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                case 'LINK_CARD_TYPE_VOTE':
-                  final vote = element.linkCard!.card!.vote!;
+                case 'LINK_CARD_TYPE_VOTE' when (card.vote != null):
+                  final vote = card.vote!;
                   child = Row(
                     spacing: 10,
                     children: [
@@ -721,7 +675,8 @@ class OpusContent extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: .start,
                           children: [
-                            Text(vote.desc!),
+                            if (vote.desc?.isNotEmpty == true)
+                              Text(vote.desc!),
                             Text(
                               '${vote.joinNum}人参与',
                               style: TextStyle(
@@ -734,41 +689,18 @@ class OpusContent extends StatelessWidget {
                       ),
                     ],
                   );
-                case 'LINK_CARD_TYPE_MUSIC':
-                  final music = element.linkCard!.card!.music!;
-                  child = Row(
-                    spacing: 10,
-                    children: [
-                      NetworkImgLayer(
-                        width: 104,
-                        height: 65,
-                        src: music.cover,
-                        borderRadius: const .all(.circular(6)),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: .start,
-                          children: [
-                            Text(music.title!),
-                            if (music.label != null)
-                              Text(
-                                music.label!,
-                                maxLines: 2,
-                                overflow: .ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colorScheme.outline,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                case 'LINK_CARD_TYPE_MUSIC' when (card.music != null):
+                  final music = card.music!;
+                  child = _coverCard(
+                    cover: music.cover,
+                    title: music.title,
+                    descs: [music.label],
+                    colorScheme: colorScheme,
                   );
-                case 'LINK_CARD_TYPE_GOODS':
-                  final goods = element.linkCard!.card!.goods!;
+                case 'LINK_CARD_TYPE_GOODS' when (card.goods != null):
+                  final goods = card.goods!;
                   child = Column(
-                    children: goods.items!.map((e) {
+                    children: (goods.items ?? const []).map((e) {
                       return GestureDetector(
                         onTap: () {
                           if (e.jumpUrl?.isNotEmpty == true) {
@@ -788,7 +720,8 @@ class OpusContent extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: .start,
                                 children: [
-                                  Text(e.name!),
+                                  if (e.name?.isNotEmpty == true)
+                                    Text(e.name!),
                                   if (e.brief?.isNotEmpty == true)
                                     Text(
                                       e.brief!,
@@ -813,8 +746,9 @@ class OpusContent extends StatelessWidget {
                       );
                     }).toList(),
                   );
-                case "LINK_CARD_TYPE_EVA3_VIDEO":
-                  final info = element.linkCard!.card!.eva3Video!.info!;
+                case "LINK_CARD_TYPE_EVA3_VIDEO"
+                    when (card.eva3Video?.info != null):
+                  final info = card.eva3Video!.info!;
                   Widget cover = NetworkImgLayer(
                     width: 104,
                     height: 65,
@@ -846,11 +780,12 @@ class OpusContent extends StatelessWidget {
                             crossAxisAlignment: .start,
                             mainAxisAlignment: .spaceBetween,
                             children: [
-                              Text(
-                                info.title!,
-                                maxLines: 2,
-                                overflow: .ellipsis,
-                              ),
+                              if (info.title?.isNotEmpty == true)
+                                Text(
+                                  info.title!,
+                                  maxLines: 2,
+                                  overflow: .ellipsis,
+                                ),
                               if (info.statInfos case final statInfos?
                                   when statInfos.isNotEmpty)
                                 Text(
@@ -866,8 +801,9 @@ class OpusContent extends StatelessWidget {
                       ],
                     ),
                   );
-                case "LINK_CARD_TYPE_EVA3_OPUS":
-                  final info = element.linkCard!.card!.eva3Opus!.info!;
+                case "LINK_CARD_TYPE_EVA3_OPUS"
+                    when (card.eva3Opus?.info != null):
+                  final info = card.eva3Opus!.info!;
                   final cover = info.pics?.firstOrNull?.src;
                   child = SizedBox(
                     height: 65,
@@ -886,11 +822,12 @@ class OpusContent extends StatelessWidget {
                             crossAxisAlignment: .start,
                             mainAxisAlignment: .spaceBetween,
                             children: [
-                              Text(
-                                info.title!,
-                                maxLines: 2,
-                                overflow: .ellipsis,
-                              ),
+                              if (info.title?.isNotEmpty == true)
+                                Text(
+                                  info.title!,
+                                  maxLines: 2,
+                                  overflow: .ellipsis,
+                                ),
                               Text.rich(
                                 TextSpan(
                                   children:
@@ -924,9 +861,13 @@ class OpusContent extends StatelessWidget {
                       ],
                     ),
                   );
+                // 已知类型但 payload 缺失，或属于 archive/match/reserve 等
+                // 尚未实现的类型：退回通用链接卡，不再抛异常
                 default:
-                  throw UnimplementedError(
-                    '\nparaType: ${element.paraType},\ncard type: $type',
+                  child = _genericLinkCard(
+                    showText: card.showText,
+                    link: card.link,
+                    colorScheme: colorScheme,
                   );
               }
               return Material(
@@ -939,15 +880,18 @@ class OpusContent extends StatelessWidget {
                       ? null
                       : () {
                           try {
-                            final card = element.linkCard!.card!;
                             if (type == 'LINK_CARD_TYPE_VOTE') {
-                              showVoteDialog(
-                                context,
-                                card.vote?.voteId ?? int.parse(card.oid!),
-                              );
+                              final voteId =
+                                  card.vote?.voteId ??
+                                  int.tryParse(card.oid ?? '');
+                              if (voteId != null) {
+                                showVoteDialog(context, voteId);
+                              }
                               return;
                             }
                             if (type == 'LINK_CARD_TYPE_ITEM_NULL') {
+                              final oid = card.oid;
+                              if (oid == null) return;
                               showDialog(
                                 context: context,
                                 builder: (context) => SimpleDialog(
@@ -958,18 +902,17 @@ class OpusContent extends StatelessWidget {
                                   children: [
                                     DialogOption(
                                       onPressed: () {
+                                        final aid = int.tryParse(oid);
+                                        if (aid == null) return;
                                         Get.back();
-                                        PiliScheme.videoPush(
-                                          int.parse(card.oid!),
-                                          null,
-                                        );
+                                        PiliScheme.videoPush(aid, null);
                                       },
                                       child: const Text('视频'),
                                     ),
                                     DialogOption(
                                       onPressed: () {
                                         Get.back();
-                                        PageUtils.pushDynFromId(id: card.oid!);
+                                        PageUtils.pushDynFromId(id: oid);
                                       },
                                       child: const Text('动态/专栏'),
                                     ),
@@ -979,16 +922,16 @@ class OpusContent extends StatelessWidget {
                               return;
                             }
                             final url = switch (type) {
-                              'LINK_CARD_TYPE_UGC' => card.ugc!.jumpUrl,
-                              'LINK_CARD_TYPE_COMMON' => card.common!.jumpUrl,
-                              'LINK_CARD_TYPE_LIVE' => card.live!.jumpUrl,
-                              'LINK_CARD_TYPE_OPUS' => card.opus!.jumpUrl,
-                              'LINK_CARD_TYPE_MUSIC' => card.music!.jumpUrl,
+                              'LINK_CARD_TYPE_UGC' => card.ugc?.jumpUrl,
+                              'LINK_CARD_TYPE_COMMON' => card.common?.jumpUrl,
+                              'LINK_CARD_TYPE_LIVE' => card.live?.jumpUrl,
+                              'LINK_CARD_TYPE_OPUS' => card.opus?.jumpUrl,
+                              'LINK_CARD_TYPE_MUSIC' => card.music?.jumpUrl,
                               'LINK_CARD_TYPE_EVA3_VIDEO' =>
-                                card.eva3Video!.info!.jumpUrl,
+                                card.eva3Video?.info?.jumpUrl,
                               'LINK_CARD_TYPE_EVA3_OPUS' =>
-                                card.eva3Opus!.info!.jumpUrl,
-                              _ => null,
+                                card.eva3Opus?.info?.jumpUrl,
+                              _ => card.link,
                             };
                             if (url != null && url.isNotEmpty) {
                               PiliScheme.routePushFromUrl(url);
