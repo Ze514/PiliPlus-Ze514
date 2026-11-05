@@ -31,11 +31,22 @@ Offset calcWindowOffset({
   if (savedPosition != null) {
     final dx = savedPosition.dx;
     final dy = savedPosition.dy;
-    if (dx > workArea.left + kWindowKeepVisible &&
-        dy > workArea.top + kWindowKeepVisible &&
-        dx < workArea.right - kWindowKeepVisible &&
-        dy < workArea.bottom - kWindowKeepVisible) {
-      return Offset(dx, dy);
+    // 窗口在保存位置下还有多少落在工作区内
+    final visibleWidth =
+        math.min(dx + windowSize.width, workArea.right) -
+        math.max(dx, workArea.left);
+    final visibleHeight =
+        math.min(dy + windowSize.height, workArea.bottom) -
+        math.max(dy, workArea.top);
+    if (visibleWidth >= kWindowKeepVisible &&
+        visibleHeight >= kWindowKeepVisible) {
+      // 还看得见就不用重新居中，但把窗口拉回工作区，避免大部分跑到屏幕外
+      final maxDx = math.max(workArea.left, workArea.right - windowSize.width);
+      final maxDy = math.max(workArea.top, workArea.bottom - windowSize.height);
+      return Offset(
+        math.min(math.max(dx, workArea.left), maxDx),
+        math.min(math.max(dy, workArea.top), maxDy),
+      );
     }
   }
 
