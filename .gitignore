@@ -153,3 +153,7 @@ test*
 
 # Local PR description
 /PR.md
+
+# 上游开始跟踪 test/，这里取消屏蔽
+!/test/
+!/test/**
