@@ -178,6 +178,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   int get _sourceGeneration => _sourceGate.generation;
 
   Timer? _timer;
+
   StreamSubscription? _subForSeek;
 
   Box setting = GStorage.setting;
@@ -909,11 +910,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     return null;
   }
 
-  static Future<void>? seekToIfExists(
-    Duration position, {
-    bool isSeek = true,
-  }) {
-    return _instance?.seekTo(position, isSeek: isSeek);
+  static Future<void>? seekToIfExists(Duration position) {
+    return _instance?.seekTo(position);
   }
 
   static double? getVolumeIfExists() {
@@ -1742,10 +1740,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     // 播放时自动隐藏控制条
-    controls = !hideControls;
+    if (hideControls) controls = false;
     // repeat为true，将从头播放
     if (repeat) {
-      await seekTo(Duration.zero, isSeek: false);
+      await seekTo(Duration.zero);
     }
 
     await _videoPlayerController?.play();
@@ -2004,7 +2002,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   void onForwardBackward(Duration duration) {
     seekTo(
       duration.clamp(Duration.zero, videoPlayerController!.state.duration),
-      isSeek: false,
     ).whenComplete(play);
   }
 

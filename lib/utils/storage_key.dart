@@ -155,6 +155,7 @@ abstract final class SettingBoxKey {
       downloadPath = 'downloadPath',
       androidDownloadPath = 'androidDownloadPath',
       keepDownPathOnUninstall = 'keepDownPathOnUninstall',
+      cachePlayInfo = 'cachePlayInfo',
       imageSavePath = 'imageSavePath',
       emotePath = 'emotePath',
       emoteDownAll = 'emoteDownAll',
@@ -172,7 +173,8 @@ abstract final class SettingBoxKey {
       buvid = 'buvid',
       blockAtOnlyReply = 'blockAtOnlyReply',
       blockReplyAtCount = 'blockReplyAtCount',
-      filterIntro = 'filterIntro';
+      filterIntro = 'filterIntro',
+      showRefreshFAB = 'showRefreshFAB';
 
   static const String superChatType = 'superChatType',
       enableFullScreenSC = 'enableFullScreenSC',
@@ -264,7 +266,8 @@ abstract final class SettingBoxKey {
       reduceLuxColor = 'reduceLuxColor',
       liveCdnUrl = 'liveCdnUrl',
       saveReply = 'saveReply',
-      appFont = 'appFont';
+      appFont = 'appFont',
+      foldDepth = 'foldDepth';
 }
 
 abstract final class LocalCacheKey {
