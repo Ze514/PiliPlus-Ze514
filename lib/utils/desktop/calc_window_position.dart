@@ -1,3 +1,4 @@
+import 'package:PiliPlus/utils/desktop/window_position.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/rendering.dart' show Offset, Size;
@@ -32,28 +33,18 @@ Offset calcWindowPosition(Size windowSize) {
 
   final workArea = currentDisplay.workArea.toRect();
 
-  final double visibleWidth = workArea.width;
-  final double visibleHeight = workArea.height;
-
-  final double visibleStartX = workArea.left;
-  final double visibleStartY = workArea.top;
-
   final windowPosition = Pref.windowPosition;
-  if (windowPosition != null) {
-    try {
-      final dx = windowPosition[0];
-      final dy = windowPosition[1];
-      if (dx >= visibleStartX &&
-          dy >= visibleStartY &&
-          dx < (visibleWidth - 30) &&
-          dy < (visibleHeight - 30)) {
-        return Offset(dx, dy);
-      }
-    } catch (_) {}
+  if (windowPosition != null && windowPosition.length >= 2) {
+    final fitted = fitWindowPosition(
+      windowSize: windowSize,
+      workArea: workArea,
+      savedPosition: Offset(windowPosition[0], windowPosition[1]),
+    );
+    if (fitted != null) return fitted;
   }
 
   return Offset(
-    visibleStartX + (visibleWidth / 2) - (windowSize.width / 2),
-    visibleStartY + ((visibleHeight / 2) - (windowSize.height / 2)),
+    workArea.left + (workArea.width / 2) - (windowSize.width / 2),
+    workArea.top + ((workArea.height / 2) - (windowSize.height / 2)),
   );
 }
