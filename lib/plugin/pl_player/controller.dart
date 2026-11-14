@@ -523,7 +523,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       (Platform.isIOS && IOSPipHelper.isActive) ||
       (PlatformUtils.isDesktop && isDesktopPip);
   late bool isDesktopPip = false;
-  late nativeapi.Size _lastMinSize;
   late nativeapi.Rectangle _lastWindowBounds;
   static nativeapi.Rectangle? _lastPipBounds;
 
@@ -597,7 +596,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     isDesktopPip = false;
     if (showWindowTitleBar) window.titleBarStyle = .normal;
     window
-      ..minimumSize = _lastMinSize
+      ..minimumSize = DeviceUtils.desktopMinSize
       ..bounds = _lastWindowBounds
       ..aspectRatio = 0;
     setAlwaysOnTop(false, window: window);
@@ -611,7 +610,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     isDesktopPip = true;
 
-    _lastMinSize = window.minimumSize;
     _lastWindowBounds = window.bounds;
 
     if (showWindowTitleBar) window.titleBarStyle = .hidden;

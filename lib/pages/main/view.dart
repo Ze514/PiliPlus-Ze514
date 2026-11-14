@@ -16,8 +16,6 @@ import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/desktop/tray_controller.dart';
 import 'package:PiliPlus/utils/desktop/window_controller.dart';
-import 'package:PiliPlus/utils/extension/context_ext.dart';
-import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/mobile_observer.dart';
@@ -78,7 +76,7 @@ class _MainAppState extends PopScopeState<MainApp>
       }
     }
     if (!_mainController.useSideBar) {
-      _mainController.useBottomNav = MediaQuery.sizeOf(context).isPortrait;
+      _mainController.useBottomNav = MediaQuery.isPortraitOf(context);
     }
   }
 
@@ -255,7 +253,7 @@ class _MainAppState extends PopScopeState<MainApp>
     if (_mainController.navigationBars.length > 1 ||
         tabs.isNotEmpty ||
         (webTabs != null && webTabs.enabled.value)) {
-      if (context.isTablet && _mainController.optTabletNav) {
+      if (MediaQuery.isTabletOf(context) && _mainController.optTabletNav) {
         return _buildNavigationDrawer(webTabs, tabs);
       }
       return _buildNavigationRail(webTabs, tabs);

@@ -251,7 +251,7 @@ class LiveRoomController extends GetxController
           autoplay: autoplay,
           fromQuery: true,
         ),
-        if (!isLoaded.value && Accounts.heartbeat.isLogin) _fetchBlockRules(),
+        if (!isLoaded.value && isMainLogin) _fetchBlockRules(),
       ]);
       isLoaded.value = true;
       // 直播埋点需要 roomInfoH5 与首次取流都完成，谁后完成就由谁触发，

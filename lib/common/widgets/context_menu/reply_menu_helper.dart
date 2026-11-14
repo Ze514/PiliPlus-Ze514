@@ -9,7 +9,7 @@ void showEmoteDownloadSheet(
     useSafeArea: true,
     isScrollControlled: true,
     constraints: BoxConstraints(
-      maxWidth: min(640, context.mediaQueryShortestSide),
+      maxWidth: min(640, MediaQuery.shortestSideOf(context)),
     ),
     builder: (context) {
       final theme = Theme.of(context);
