@@ -409,7 +409,12 @@ class LiveRoomController extends GetxController
       toastNotLogin();
       return;
     }
+    // 面板已打开时不再压第二层路由，避免多个留言框叠在一起
+    if (showSendDmPanel.value) {
+      return;
+    }
     getUserMedal();
+    showSendDmPanel.value = true;
     Get.key.currentState!.push(
       PublishRoute(
         barrierColor: Colors.transparent,
@@ -438,7 +443,9 @@ class LiveRoomController extends GetxController
             ? const Duration(milliseconds: 350)
             : const Duration(milliseconds: 400),
       ),
-    );
+    ).whenComplete(() {
+      if (!isClosed) showSendDmPanel.value = false;
+    });
   }
 
   void onAtUser(DanmakuMsg item) {

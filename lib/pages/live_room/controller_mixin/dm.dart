@@ -5,6 +5,10 @@ mixin _LiveDMMixin
   LiveDmInfoData? dmInfo;
   List<RichTextItem>? savedDanmaku;
 
+  /// 留言（发弹幕）面板路由是否已打开。打开期间隐藏直播间底部那个假的
+  /// 「发送弹幕」条，否则面板收起输入法后会与它叠成两个留言框（#3643）。
+  final RxBool showSendDmPanel = false.obs;
+
   int builtLength = 0;
   final messages = <dynamic>[].obs;
   bool get shouldRefresh => builtLength != messages.length;

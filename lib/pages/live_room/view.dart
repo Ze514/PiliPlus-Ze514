@@ -882,7 +882,16 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     );
   }
 
-  Widget get _buildInputWidget {
+  Widget get _buildInputWidget => Obx(
+        () => Offstage(
+          // 留言面板打开时隐藏这条假的输入条：面板自身带输入框，
+          // 两者都摆在底部会叠成两个留言框（#3643）
+          offstage: liveController.showSendDmPanel.value,
+          child: _buildInputWidgetContent,
+        ),
+      );
+
+  Widget get _buildInputWidgetContent {
     final child = Container(
       padding: .only(top: 5, left: 10, right: 10, bottom: padding.bottom),
       height: 70 + padding.bottom,
