@@ -165,7 +165,15 @@ jobs:
           rpmbuild --define "_topdir $RPM_BUILD_ROOT" -bb "$RPM_BUILD_ROOT/SPECS/piliplus.spec"
 
           printf "移动生成的 RPM...\n"
-          find "$RPM_BUILD_ROOT/RPMS" -name "*.rpm" -exec mv {} "PiliPlus_linux_${{ env.version }}_amd64.rpm" \;
+          # 只取主包：rpmbuild 会同时产出 *-debuginfo/*-debugsource 子包，
+          # 原先用 find 把同目录下所有 *.rpm 逐个 mv 到同一个名字会互相覆盖，
+          # 最后留下的是 debuginfo（11KB），release 里挂的是错的包
+          MAIN_RPM=$(find "$RPM_BUILD_ROOT/RPMS" -name "*.rpm" ! -name "*debuginfo*" ! -name "*debugsource*" | sort | head -n 1)
+          if [ -z "$MAIN_RPM" ]; then
+            echo "未找到主 RPM 包" >&2
+            exit 1
+          fi
+          mv "$MAIN_RPM" "PiliPlus_linux_${{ env.version }}_amd64.rpm"
 
           printf "完成: PiliPlus_linux_%s_amd64.rpm\n" "${{ env.version }}"
         shell: bash
