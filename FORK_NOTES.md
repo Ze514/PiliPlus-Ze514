@@ -107,6 +107,25 @@ C:\flutter\bin\flutter.bat build windows --release --dart-define-from-file=pili_
 **Android**
 GitHub Actions → **Build** workflow，选分支，只勾 `build_android`，**`tag` 留空**（填了会发正式 Release）。产物在本次 run 的 `Android_arm64-v8a` artifact 里。
 
+**发 Release（全平台）**
+还是 Build workflow，勾全 5 个平台 + 填 `tag`（`workflow_dispatch` 的输入），5 个 job 各自往同一个 tag 追加附件，`softprops/action-gh-release` 自动建 release。API 触发：
+```powershell
+# 凭据：git 凭据管理器里存着 PAT，注意 credential fill 要喂 host，否则报
+# "refusing to work with credential missing host field"
+$in = "protocol=https`nhost=github.com`n`n"
+$cred = ($in | git credential fill | ? { $_ -match '^password=' }) -replace '^password=',''
+$hdr = @{ Authorization = "Bearer $cred"; 'User-Agent' = 'piliplus-rel'; 'Content-Type' = 'application/json' }
+$body = @{ ref='main'; inputs=@{ build_android='true'; build_ios='true'; build_mac='true'
+                               build_win_x64='true'; build_linux_x64='true'; tag='v2.2.1' } } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/Ze514/PiliPlus-Ze514/actions/workflows/build.yml/dispatches' -Headers $hdr -Body $body
+```
+- 标签名：早期 fork 用 `releaseN`，后来改用版本号 `v2.2.1`
+- 版本号会抬到 `2.2.1+<commit 数>`；Android 因为走 `build.ps1 android` 会带 hash → `2.2.1-<sha9>+<count>`
+- **`tag` 已存在时重新发版会挂到旧 commit 上**：要换 commit 就得先 `DELETE /repos/{o}/{r}/releases/{id}` 再 `DELETE /repos/{o}/{r}/git/refs/tags/{tag}`，否则新附件和旧 tag 对不上
+- **release 正文默认是空的**（workflow 没设 `body`），要事后 `PATCH /repos/{o}/{r}/releases/{id}`，body 用 UTF8 字节发，别直接发字符串（PowerShell 会按 ANSI 编码）
+- 坑：`linux_x64.yml` 原来把 `*-debuginfo` 子包覆盖主包，挂到 release 上的是 11KB 的 debuginfo（`1e854a4f7` 已修）
+- 已发：**v2.2.1**（2026-11-20，commit `1e854a4f7`，id `452523641`，11 个附件）
+
 ## 6. 自建 WebDAV（Debian）
 
 跑在局域网 Debian 12 主机上，用 rclone 的静态二进制，**不装系统包、不需要 root**。
