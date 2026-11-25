@@ -928,8 +928,10 @@ class _AudioPageState extends State<AudioPage> {
                           tag: cover,
                           child: NetworkImgLayer(
                             src: cover,
-                            width: 170,
-                            height: 170,
+                            // 3:2。原先固定 170x170 把封面裁成正方形，
+                            // 既有损画面又在封面两侧留白（#3693）
+                            width: 225,
+                            height: 150,
                             cacheWidth: false,
                           ),
                         ),
